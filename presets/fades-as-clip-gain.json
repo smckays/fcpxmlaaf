@@ -1,0 +1,7 @@
+{
+  "preset_version": 1,
+  "name": "Default mapping, fades drawn into clip gain",
+  "groups": [],
+  "roles": {},
+  "options": { "fades": "gain" }
+}

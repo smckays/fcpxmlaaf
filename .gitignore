@@ -1,0 +1,7 @@
+dist/
+__pycache__/
+*.pyc
+*.aaf
+AAF Export/
+mapper/converter-*.b64.txt
+.DS_Store

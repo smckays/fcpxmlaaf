@@ -1,0 +1,103 @@
+FCPXML -> AAF CONVERTER  (test build v0.2)
+=========================================
+
+Thanks for testing! This turns a Final Cut Pro timeline export into an AAF
+for Pro Tools (or any DAW that opens AAFs). Audio is embedded in the AAF as
+mono 48 kHz / 24-bit clips with 5-second handles.
+
+New in v0.2: clip volume (including keyframes), fade handles, and
+cross-dissolves come across as clip gain, fades and crossfades.
+
+
+WHAT YOU NEED (Mac)
+-------------------
+- Apple's Command Line Tools (for Python). If they're missing, the tool
+  offers to install them on first run.
+- ffmpeg. Needed only for audio inside video files (.mov/.mp4).
+  WAV and AIFF audio converts without it.
+  To install: get Homebrew from https://brew.sh, then in Terminal run:
+      brew install ffmpeg
+
+
+HOW TO RUN
+----------
+1. Double-click "Convert to AAF.command".
+   If macOS says it "cannot be opened": right-click it, choose Open, then
+   click Open again. (It's unsigned test software.)
+2. Pick your FCPXML. In Final Cut: select the project, then
+   File > Export XML... (any version is fine).
+3. Choose a preset, or click "No preset" for the default
+   (Dialogue -> DX tracks, Music -> MX, Effects -> FX).
+4. The result opens in Finder: an "AAF Export" folder next to your FCPXML,
+   holding the .aaf and a short report.
+
+
+TEST 1: THE SAMPLE PROJECT (do this first, about 5 minutes)
+----------------------------------------------------------
+The "Sample Project" folder holds a tiny FCPXML plus test-tone media,
+so you can check Pro Tools import before using a real edit.
+Run the converter on "Sample Project/FCPXML2AAF Sample/Test Cut v1.fcpxmld".
+(If the file picker won't select the .fcpxmld, cancel and the tool will
+ask you to choose it as a folder instead.)
+
+In Pro Tools: File > Open Session (or Import > Session Data) on the .aaf.
+You should see:
+  - 8 tracks: DX 1-4, MX 1-2, FX 1-2
+  - Session start 01:00:00:00, 23.976 fps
+  - DX 1 at 01:00:00:00 = "Interview A001" (one tone);
+    DX 2 at the same time = a different tone (that's the Lav)
+  - Music on MX 1 + MX 2 starting at 01:00:01:00
+  - FX 1: "SFX Door" at 01:00:13:00, "SFX Door 2" at 01:00:23:12
+  - FX 2: "SFX Wind" at 01:00:14:00 (overlaps the door, so it gets its own track)
+  - Handles: try trimming a clip outward. About 5 seconds of extra audio
+    should be there.
+  Levels and fades (new in v0.2):
+  - "Interview A001" has a short fade-in (half a second) at the start
+  - On DX 1 and DX 2, "Interview A001" crossfades into "Recorder 4ch"
+    from 01:00:04:12 to 01:00:05:12 (a 1-second crossfade on the same track)
+  - "Recorder 4ch" clip gain ramps up from -20 dB to 0 dB over its first
+    couple of seconds
+  - Music clip gain sits at -6 dB with a 2-second fade-out at the end
+  - "SFX Door" and "SFX Wind" clip gain sits at -3 dB
+
+
+TEST 2: A REAL EDIT
+-------------------
+Pick a short, real FCP project (a few minutes long is perfect) and convert it.
+Check the AAF against the FCP timeline at several points.
+
+
+WHAT TO SEND BACK
+-----------------
+Send the report .txt from each test, plus anything below that applies:
+  [ ] Did the AAF open in Pro Tools? (Which Pro Tools version?)
+  [ ] Any error messages? (A screenshot of the Terminal window is great.)
+  [ ] Are clips in sync with the picture? Spot-check 3-4 places.
+  [ ] Are the tracks and names what a mixer would want?
+  [ ] Anything missing (clips, roles, fades, levels)?
+  [ ] Did the fades, crossfade and clip gain come through? Check this in
+      the sample project (list above).
+  [ ] If it didn't open: open "presets/sample-edit-rate.json" as the preset
+      and try again. It writes the AAF in a different timing mode, which
+      tells us which one Pro Tools prefers.
+  [ ] If the AAF opens but fades are missing or wrong: try again with
+      "presets/fades-as-clip-gain.json". It draws the fades into the clip
+      gain line instead, which tells us what Pro Tools accepts.
+
+
+KNOWN LIMITS IN v0.2
+--------------------
+- Volume comes across as clip gain on each clip. It is never baked into
+  the audio, so the mixer can always reset it.
+- Fade shapes (+3 dB, S-curve and so on) arrive as plain linear fades.
+- Pan and audio effects (EQ, compression, etc.) are not carried over.
+- Retimed (speed-changed) clips are skipped and listed in the report.
+- Audio is always split into mono tracks (a stereo music clip -> 2 tracks).
+
+
+ADVANCED (TERMINAL)
+-------------------
+  cd to this folder, then:
+  PYTHONPATH=engine python3 -m fcpxml2aaf "My Cut.fcpxmld" --preset my.json --out ~/Desktop/AAF
+  Options: --dry-run (layout only, no audio)  --scan (list roles)
+           --media-root FOLDER (where to look for moved media)

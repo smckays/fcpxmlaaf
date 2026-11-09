@@ -1,0 +1,621 @@
+<title>AAF Track Mapper</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a track sheet. Left = load + map roles; right = live track layout like a DAW's track list, plus save. */
+:root {
+  --paper: #f2f3ee; --panel: #fbfbf8; --ink: #17201b; --muted: #5b6660; --rule: #d3d8cf; --rule-strong: #aab3a8;
+  --accent: #a85f00; --accent-ink: #ffffff; --accent-soft: #f6e6cc;
+  --dx: #2c64c9; --mx: #23804f; --fx: #8346c4; --other: #6b746e;
+  --warn: #9a5b00; --warn-bg: #fbf0dc; --bad: #b3261e;
+  --display: "Saira Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121614; --panel: #1a1f1c; --ink: #e3e8e1; --muted: #9aa69f; --rule: #2c3430; --rule-strong: #46514b;
+  --accent: #f0a640; --accent-ink: #1b1306; --accent-soft: #3a2a12;
+  --dx: #74a5ff; --mx: #5fcf92; --fx: #bd93ff; --other: #9aa39d;
+  --warn: #f0b860; --warn-bg: #33270f; --bad: #ff8a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #121614; --panel: #1a1f1c; --ink: #e3e8e1; --muted: #9aa69f; --rule: #2c3430; --rule-strong: #46514b;
+  --accent: #f0a640; --accent-ink: #1b1306; --accent-soft: #3a2a12;
+  --dx: #74a5ff; --mx: #5fcf92; --fx: #bd93ff; --other: #9aa39d;
+  --warn: #f0b860; --warn-bg: #33270f; --bad: #ff8a80; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3, .label { font-family: var(--display); text-wrap: balance }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1; margin: 0; font-weight: 700; letter-spacing: .01em }
+h2 { font-size: 22px; margin: 0; font-weight: 600; letter-spacing: .02em }
+h3 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .03em }
+.label { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600 }
+p { margin: 0; max-width: 65ch }
+.mono, .tc { font-family: var(--mono); font-variant-numeric: tabular-nums }
+a { color: var(--accent) }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px;
+  border-bottom: 2px solid var(--ink); padding-bottom: 14px }
+.build { font-family: var(--mono); font-size: 12px; border: 1px solid var(--rule-strong); border-radius: 3px; padding: 2px 8px; color: var(--muted) }
+.lede { color: var(--muted); margin-top: 6px }
+
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 18px 0 26px; border: 1px solid var(--rule) }
+.steps li { list-style: none; padding: 10px 12px; border-right: 1px solid var(--rule); font-size: 13.5px; color: var(--muted) }
+.steps li:last-child { border-right: 0 }
+.steps b { display: block; font-family: var(--display); font-size: 15px; color: var(--ink); letter-spacing: .03em }
+.steps { padding: 0 }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start }
+.col { display: grid; gap: 28px; min-width: 0 }
+section.block { display: grid; gap: 12px; min-width: 0 }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px }
+
+.drop { border: 1.5px dashed var(--rule-strong); border-radius: 6px; padding: 18px; display: flex; flex-wrap: wrap; gap: 12px 18px;
+  align-items: center; background: var(--panel); transition: border-color .15s, background .15s }
+.drop.over { border-color: var(--accent); background: var(--accent-soft) }
+.drop p { color: var(--muted); font-size: 14px }
+.btn { font: 600 14px var(--body); border-radius: 4px; padding: 8px 14px; border: 1px solid var(--rule-strong); background: var(--panel);
+  color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap }
+.btn:hover { border-color: var(--ink) }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.btn.primary:hover { filter: brightness(1.06) }
+.btn.small { padding: 4px 9px; font-size: 13px }
+.btn:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input[type="file"] { display: none }
+
+.meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule) }
+.meta > div { background: var(--panel); padding: 8px 12px; min-width: 0 }
+.meta .v { font-family: var(--mono); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.sample-flag { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-bg); padding: 2px 8px; border-radius: 3px }
+.notes { display: grid; gap: 6px; font-size: 13.5px }
+.notes div { background: var(--warn-bg); color: var(--ink); padding: 7px 10px; border-left: 3px solid var(--warn) }
+.err { color: var(--bad); font-weight: 600 }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--panel) }
+table { border-collapse: collapse; width: 100%; min-width: 600px }
+th { text-align: left; font: 600 12px var(--display); text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+  padding: 8px 10px; border-bottom: 1px solid var(--rule-strong) }
+td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle }
+tr:last-child td { border-bottom: 0 }
+tr.skipped td:not(:first-child) { opacity: .55 }
+.role { display: inline-flex; align-items: center; gap: 8px; font-weight: 600 }
+.role i { width: 10px; height: 22px; border-radius: 2px; background: var(--c, var(--other)); flex: none }
+.role small { font-weight: 400; color: var(--muted) }
+select, input[type="text"], input[type="number"] { font: 14px var(--body); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: 4px; padding: 5px 8px; max-width: 100% }
+input.ch { width: 92px; font-family: var(--mono) }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap }
+
+.groups { display: grid; gap: 8px }
+.grow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--rule); padding: 8px 10px }
+.grow input[type="text"] { width: 90px; font-family: var(--mono); font-weight: 600 }
+.grow input[type="number"] { width: 64px }
+.grow .hint { color: var(--muted); font-size: 13px; flex: 1 1 160px; min-width: 0 }
+
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; background: var(--panel); border: 1px solid var(--rule); padding: 14px }
+.opts label { display: grid; gap: 4px; font-size: 14px; font-weight: 600 }
+.opts .help { font-weight: 400; color: var(--muted); font-size: 12.5px; line-height: 1.4 }
+
+aside.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 18px; min-width: 0 }
+.console { background: var(--panel); border: 1px solid var(--rule-strong); border-radius: 6px; overflow: hidden }
+.console .head { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px; border-bottom: 1px solid var(--rule) }
+.tracks { max-height: 46vh; overflow-y: auto }
+.trk { display: grid; grid-template-columns: 6px 64px minmax(0, 1fr); align-items: center; gap: 10px; padding: 5px 12px 5px 0;
+  border-bottom: 1px solid var(--rule); font-size: 13px }
+.trk:last-child { border-bottom: 0 }
+.trk i { align-self: stretch; background: var(--c, var(--other)) }
+.trk .n { font-family: var(--mono); font-weight: 600 }
+.trk .r { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.trk.empty .n, .trk.empty .r { opacity: .5 }
+.trk.more .r { font-style: italic }
+.console .foot { padding: 8px 12px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rule) }
+
+.save { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 14px }
+.save input[type="text"] { width: 100% }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.status { font-size: 13px; color: var(--muted); min-height: 1.2em }
+textarea { width: 100%; min-height: 160px; font: 12px/1.45 var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 8px }
+
+.kit { margin-top: 40px; border-top: 2px solid var(--ink); padding-top: 18px; display: grid; gap: 16px }
+.kitgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px }
+.card { background: var(--panel); border: 1px solid var(--rule); padding: 14px; display: grid; gap: 8px; align-content: start }
+.card ol, .card ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px }
+code { font-family: var(--mono); font-size: 13px; background: var(--accent-soft); padding: 1px 5px; border-radius: 3px }
+
+@media (max-width: 880px) {
+  .grid { grid-template-columns: minmax(0, 1fr) }
+  aside.side { position: static }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .steps li:nth-child(2) { border-right: 0 }
+  .steps li:nth-child(-n+2) { border-bottom: 1px solid var(--rule) }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="label">Final Cut Pro → AAF for audio post</div>
+      <h1>AAF Track Mapper</h1>
+      <p class="lede">Decide which FCP roles land on which Pro Tools tracks. Save that as a preset, and the converter follows it every time.</p>
+    </div>
+    <span class="build">converter v0.2 · test build</span>
+  </header>
+
+  <ol class="steps">
+    <li><b>1 · Load</b>Drop an FCPXML export to list its roles</li>
+    <li><b>2 · Map</b>Send each role to a track group</li>
+    <li><b>3 · Save</b>Download the preset (.json)</li>
+    <li><b>4 · Convert</b>Run the converter with that preset</li>
+  </ol>
+
+  <div class="grid">
+    <div class="col">
+      <section class="block" aria-labelledby="h-load">
+        <div class="sec-head"><h2 id="h-load">Timeline</h2><span id="sampleFlag" class="sample-flag">Sample timeline. Load your own below.</span></div>
+        <div class="drop" id="drop">
+          <button class="btn primary" id="pickBtn" type="button">Choose FCPXML…</button>
+          <input type="file" id="pick" accept=".fcpxml,.xml">
+          <p>Or drag in a <b>.fcpxml</b> file or <b>.fcpxmld</b> bundle. If you can't select a .fcpxmld, right-click it, choose Show Package Contents, and pick <b>Info.fcpxml</b>. The file is read in your browser and never uploaded.</p>
+        </div>
+        <div id="loadErr" class="err" hidden></div>
+        <div class="meta" id="meta"></div>
+        <div class="notes" id="notes"></div>
+      </section>
+
+      <section class="block" aria-labelledby="h-map">
+        <div class="sec-head"><h2 id="h-map">Roles → track groups</h2><span class="label">one row per role found</span></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>FCP role</th><th>Uses</th><th>Channels</th><th>Send to</th><th>Use channels</th></tr></thead>
+            <tbody id="roleRows"></tbody>
+          </table>
+        </div>
+        <p class="lede" style="font-size:13.5px">Every channel becomes its own mono track. A 4-channel recorder file fills 4 tracks, unless you type e.g. <code>1,2</code> under “Use channels.”</p>
+      </section>
+
+      <section class="block" aria-labelledby="h-groups">
+        <div class="sec-head"><h2 id="h-groups">Track groups</h2><button class="btn small" id="addGroup" type="button">+ Add group</button></div>
+        <p class="lede" style="font-size:13.5px">Track names come out as <span class="mono">DX 1, DX 2…</span> in this order. “Minimum tracks” matches a mixer's template: those tracks exist even if they're empty. Clips that overlap spill onto extra tracks automatically.</p>
+        <div class="groups" id="groups"></div>
+      </section>
+
+      <section class="block" aria-labelledby="h-opts">
+        <h2 id="h-opts">Export options</h2>
+        <div class="opts">
+          <label for="oHandles">Handles (seconds)
+            <input type="number" id="oHandles" min="0" max="60" step="1" value="5">
+            <span class="help">Extra audio before and after each cut, so the mixer can extend edits.</span></label>
+          <label for="oRate">Sample rate / bit depth
+            <select id="oRate"><option value="48000/24">48 kHz / 24-bit</option><option value="48000/16">48 kHz / 16-bit</option><option value="96000/24">96 kHz / 24-bit</option></select>
+            <span class="help">What the embedded audio is converted to.</span></label>
+          <label for="oEdit">Timing mode
+            <select id="oEdit"><option value="frame">Frame-based (Avid style)</option><option value="sample">Sample-accurate</option></select>
+            <span class="help">Frame-based is the usual choice. Try sample-accurate if Pro Tools rejects the file or clips land a few samples off.</span></label>
+          <label for="oLevels">Volume levels
+            <select id="oLevels"><option value="clip_gain">As clip gain</option><option value="off">Leave out (flat levels)</option></select>
+            <span class="help">FCP clip volume and keyframes become clip gain. The audio itself is never changed.</span></label>
+          <label for="oFades">Fades
+            <select id="oFades"><option value="aaf">As real fades and crossfades</option><option value="gain">Drawn into clip gain</option><option value="off">Leave out</option></select>
+            <span class="help">Fade handles and cross-dissolves. Use “drawn into clip gain” if Pro Tools drops the fades.</span></label>
+          <label for="oUnmapped">Roles not listed above
+            <select id="oUnmapped"><option value="by_main_role">Group by main role (DX / MX / FX)</option><option value="by_subrole">One group per subrole</option><option value="skip">Leave them out</option></select>
+            <span class="help">Covers roles that show up in a future cut.</span></label>
+        </div>
+      </section>
+    </div>
+
+    <aside class="side">
+      <div class="console" aria-labelledby="h-trk">
+        <div class="head"><h3 id="h-trk">Track layout</h3><span class="num" id="trkCount"></span></div>
+        <div class="tracks" id="tracks"></div>
+        <div class="foot">Preview based on channel counts. The converter adds tracks where clips overlap and lists them in its report.</div>
+      </div>
+
+      <div class="save">
+        <h3>Save preset</h3>
+        <label class="label" for="pName">Preset name</label>
+        <input type="text" id="pName" value="My Show - Mix Template">
+        <div class="row">
+          <button class="btn primary" id="saveBtn" type="button">Download preset</button>
+          <button class="btn" id="loadPresetBtn" type="button">Open preset…</button>
+          <input type="file" id="loadPreset" accept=".json,application/json">
+        </div>
+        <div class="status" id="saveStatus"></div>
+        <details id="jsonBox"><summary class="label" style="cursor:pointer">Show preset text</summary>
+          <div style="display:grid;gap:8px;margin-top:8px">
+            <textarea id="json" readonly></textarea>
+            <div class="row"><button class="btn small" id="copyBtn" type="button">Copy</button><span class="status" id="copyStatus"></span></div>
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <section class="kit" aria-labelledby="h-kit">
+    <div class="sec-head"><h2 id="h-kit">Tester kit</h2><span class="build">Mac · about 0.5 MB</span></div>
+    <div class="kitgrid">
+      <div class="card">
+        <h3>1 · Get the converter</h3>
+        <p style="font-size:14px">Includes the converter, a sample project with test tones, and a READ ME.</p>
+        <div class="row"><button class="btn primary" id="zipBtn" type="button">Download converter (.zip)</button></div>
+        <div class="status" id="zipStatus"></div>
+      </div>
+      <div class="card">
+        <h3>2 · Run it</h3>
+        <ol>
+          <li>Unzip, then double-click <b>Convert to AAF.command</b>. If macOS blocks it: right-click, Open.</li>
+          <li>Pick the FCPXML (File → Export XML in Final Cut).</li>
+          <li>Choose the preset from this page, or none.</li>
+          <li>An <b>AAF Export</b> folder opens with the .aaf and a report.</li>
+        </ol>
+        <p style="font-size:13px;color:var(--muted)">For .mov/.mp4 audio, install ffmpeg: <code>brew install ffmpeg</code></p>
+      </div>
+      <div class="card">
+        <h3>3 · Send back</h3>
+        <ul>
+          <li>The report .txt from each run</li>
+          <li>Did it open in Pro Tools? Which version?</li>
+          <li>In sync with picture at 3–4 spots?</li>
+          <li>Tracks and names right for a mixer?</li>
+          <li>Anything missing: clips, fades, levels?</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var DEFAULT_GROUP = { dialogue: "DX", music: "MX", effects: "FX" };
+  var SAMPLE = {"timeline":"Test Cut v1","fps":23.976,"drop_frame":false,"start_timecode":"01:00:00:00","duration_seconds":50.05,"audio_rate":48000,"fcpxml_version":"1.11",
+    "roles":{"Dialogue.Boom":{"clips":2,"max_channels":2},"Dialogue.Lav":{"clips":1,"max_channels":1},"Dialogue.Recorder":{"clips":1,"max_channels":4},"Music.Score":{"clips":1,"max_channels":2},"Effects.Doors":{"clips":2,"max_channels":1},"Effects.Ambience":{"clips":1,"max_channels":1}},
+    "warnings":[]};
+
+  var state = { scan: null, isSample: true, roles: {}, groups: [], options: { handles_sec: 5, sample_rate: 48000, bit_depth: 24, edit_rate: "frame", unmapped: "by_main_role", levels: "clip_gain", fades: "aaf" } };
+  var $ = function (id) { return document.getElementById(id) };
+
+  function prettyRole(raw) {
+    if (!raw) return "Dialogue";
+    var i = raw.indexOf("."), main = i < 0 ? raw : raw.slice(0, i), sub = i < 0 ? "" : raw.slice(i + 1);
+    return main.charAt(0).toUpperCase() + main.slice(1) + (sub ? "." + sub : "");
+  }
+  function mainOf(role) { return role.split(".")[0].toLowerCase() }
+  function colorFor(role) { var m = mainOf(role); return m === "dialogue" ? "var(--dx)" : m === "music" ? "var(--mx)" : m === "effects" ? "var(--fx)" : "var(--other)" }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] }) }
+
+  // ---------- FCPXML scan (in the browser) ----------
+  function rat(v) { if (!v) return 0; v = v.replace(/s$/, ""); if (v.indexOf("/") >= 0) { var p = v.split("/"); return +p[0] / +p[1] } return +v }
+  function tc(sec, fd, drop) {
+    var fps = Math.round(1 / fd), total = Math.round(sec / fd);
+    var f = total % fps, s = Math.floor(total / fps) % 60, m = Math.floor(total / (fps * 60)) % 60, h = Math.floor(total / (fps * 3600));
+    var p = function (n) { return (n < 10 ? "0" : "") + n };
+    return p(h) + ":" + p(m) + ":" + p(s) + (drop ? ";" : ":") + p(f);
+  }
+  function countCh(spec) {
+    if (!spec) return 0; var n = 0;
+    spec.replace(/\s/g, "").split(",").forEach(function (part) {
+      if (!part) return; if (part.indexOf("-") > 0) { var a = part.split("-"); n += (+a[1] - +a[0] + 1) } else n++;
+    });
+    return n;
+  }
+  function scanXML(text) {
+    var doc = new DOMParser().parseFromString(text, "application/xml");
+    if (doc.getElementsByTagName("parsererror").length) throw new Error("This file isn't valid XML. Re-export it from Final Cut (File → Export XML).");
+    var root = doc.documentElement;
+    if (root.nodeName === "xmeml") throw new Error("This is an FCP7/Premiere-style XML (xmeml). This tool reads FCPXML from Final Cut Pro (10 and later).");
+    if (root.nodeName !== "fcpxml") throw new Error("This doesn't look like an FCPXML file.");
+    var assets = {};
+    Array.prototype.forEach.call(doc.querySelectorAll("resources > asset"), function (a) {
+      assets[a.getAttribute("id")] = { audio: a.getAttribute("hasAudio") === "1", ch: +(a.getAttribute("audioChannels") || 2) };
+    });
+    var roles = {}, warnings = [];
+    function add(role, ch) {
+      var r = roles[role] || (roles[role] = { clips: 0, max_channels: 0 });
+      r.clips++; r.max_channels = Math.max(r.max_channels, ch || 1);
+    }
+    function inactive(el, role) {
+      var sc = el.closest("sync-clip"); if (!sc) return false;
+      return Array.prototype.some.call(sc.querySelectorAll("audio-role-source"), function (s) {
+        return s.getAttribute("active") === "0" && prettyRole(s.getAttribute("role") || "").toLowerCase() === role.toLowerCase();
+      });
+    }
+    Array.prototype.forEach.call(doc.querySelectorAll("asset-clip, audio"), function (el) {
+      if (el.closest('[enabled="0"]') || el.getAttribute("srcEnable") === "video") return;
+      var asset = assets[el.getAttribute("ref")];
+      if (!asset) return;
+      if (el.nodeName === "asset-clip") {
+        if (!asset.audio) return;
+        var acs = Array.prototype.filter.call(el.children, function (c) { return c.nodeName === "audio-channel-source" });
+        if (acs.length) {
+          acs.forEach(function (s) {
+            if (s.getAttribute("enabled") === "0" || s.getAttribute("active") === "0") return;
+            var r = prettyRole(s.getAttribute("role") || el.getAttribute("audioRole") || "dialogue");
+            if (!inactive(el, r)) add(r, countCh(s.getAttribute("srcCh")) || asset.ch);
+          });
+        } else {
+          var r = prettyRole(el.getAttribute("audioRole") || "dialogue");
+          if (!inactive(el, r)) add(r, asset.ch);
+        }
+      } else {
+        var r2 = prettyRole(el.getAttribute("role") || "dialogue");
+        if (!inactive(el, r2)) add(r2, countCh(el.getAttribute("srcCh")) || asset.ch);
+      }
+    });
+    var proj = doc.querySelector("project"), seq = proj && proj.querySelector("sequence");
+    if (!seq) throw new Error("No project timeline found. In Final Cut, select the project itself (not the event) before File → Export XML.");
+    var fmt = doc.querySelector('resources > format[id="' + seq.getAttribute("format") + '"]');
+    var fd = rat(fmt && fmt.getAttribute("frameDuration")) || 1001 / 24000;
+    var drop = seq.getAttribute("tcFormat") === "DF";
+    var nproj = doc.querySelectorAll("project").length;
+    if (nproj > 1) warnings.push("This file holds " + nproj + " projects. The converter uses the first one unless told otherwise.");
+    if (doc.querySelector("timeMap")) warnings.push("Some clips are retimed. The converter skips retimed clips for now and lists them in its report.");
+    if (doc.querySelector("adjust-panner, filter-audio")) warnings.push("Pan and audio effects aren't carried over yet. Levels and fades are.");
+    if (!Object.keys(roles).length) warnings.push("No audio found in this timeline.");
+    var rateAttr = seq.getAttribute("audioRate") || "48k";
+    return {
+      timeline: proj.getAttribute("name") || "Untitled", fps: Math.round(1 / fd * 1000) / 1000, drop_frame: drop,
+      start_timecode: tc(rat(seq.getAttribute("tcStart")), fd, drop), duration_seconds: rat(seq.getAttribute("duration")),
+      audio_rate: /k$/.test(rateAttr) ? parseFloat(rateAttr) * 1000 : +rateAttr, fcpxml_version: root.getAttribute("version") || "?",
+      roles: roles, warnings: warnings
+    };
+  }
+
+  // ---------- state from scan ----------
+  function applyScan(scan, isSample) {
+    state.scan = scan; state.isSample = isSample;
+    Object.keys(scan.roles).forEach(function (role) {
+      if (!state.roles[role]) state.roles[role] = { group: DEFAULT_GROUP[mainOf(role)] || role.split(".")[0], channels: "" };
+    });
+    // keep groups that are in use, add missing ones in a DX / MX / FX first order
+    var order = ["DX", "MX", "FX"];
+    Object.keys(scan.roles).forEach(function (role) {
+      var g = state.roles[role].group;
+      if (g && g !== "__skip" && !state.groups.some(function (x) { return x.name === g })) {
+        var idx = order.indexOf(g);
+        var entry = { name: g, min_tracks: 0 };
+        if (idx >= 0) {
+          var at = state.groups.findIndex(function (x) { var j = order.indexOf(x.name); return j < 0 || j > idx });
+          if (at < 0) state.groups.push(entry); else state.groups.splice(at, 0, entry);
+        } else state.groups.push(entry);
+      }
+    });
+    renderAll();
+  }
+
+  // ---------- rendering ----------
+  function renderMeta() {
+    var s = state.scan;
+    $("sampleFlag").hidden = !state.isSample;
+    var dur = s.duration_seconds ? new Date(s.duration_seconds * 1000).toISOString().substr(11, 8) : "—";
+    $("meta").innerHTML = [["Timeline", s.timeline], ["Frame rate", s.fps + (s.drop_frame ? " DF" : "")], ["Start TC", s.start_timecode],
+      ["Length", dur], ["Audio", (s.audio_rate / 1000) + " kHz"], ["FCPXML", "v" + s.fcpxml_version]]
+      .map(function (kv) { return '<div><div class="label">' + kv[0] + '</div><div class="v">' + esc(kv[1]) + "</div></div>" }).join("");
+    $("notes").innerHTML = (s.warnings || []).map(function (w) { return "<div>" + esc(w) + "</div>" }).join("");
+  }
+
+  function groupOptions(sel) {
+    return state.groups.map(function (g) { return '<option value="' + esc(g.name) + '"' + (g.name === sel ? " selected" : "") + ">" + esc(g.name) + "</option>" }).join("") +
+      '<option value="__skip"' + (sel === "__skip" ? " selected" : "") + ">Don't export</option>";
+  }
+
+  function sortedRoles() {
+    var rank = { dialogue: 0, music: 1, effects: 2 };
+    return Object.keys(state.scan.roles).sort(function (a, b) {
+      var ra = rank[mainOf(a)] == null ? 3 : rank[mainOf(a)], rb = rank[mainOf(b)] == null ? 3 : rank[mainOf(b)];
+      return ra - rb || a.localeCompare(b);
+    });
+  }
+
+  function renderRoles() {
+    $("roleRows").innerHTML = sortedRoles().map(function (role, i) {
+      var info = state.scan.roles[role], m = state.roles[role], parts = role.split(".");
+      return '<tr class="' + (m.group === "__skip" ? "skipped" : "") + '">' +
+        '<td><span class="role" style="--c:' + colorFor(role) + '"><i></i>' + esc(parts[0]) + (parts[1] ? ' <small>/ ' + esc(parts.slice(1).join(".")) + "</small>" : "") + "</span></td>" +
+        '<td class="num">' + info.clips + (info.clips === 1 ? " clip" : " clips") + "</td>" +
+        '<td class="num">' + info.max_channels + " ch</td>" +
+        '<td><select id="rg' + i + '" data-role="' + esc(role) + '" class="rg" aria-label="Group for ' + esc(role) + '">' + groupOptions(m.group) + "</select></td>" +
+        '<td><input type="text" id="rc' + i + '" class="ch rc" data-role="' + esc(role) + '" placeholder="all" value="' + esc(m.channels) + '" aria-label="Channels for ' + esc(role) + '"></td></tr>';
+    }).join("");
+  }
+
+  function renderGroups() {
+    $("groups").innerHTML = state.groups.map(function (g, i) {
+      var used = Object.keys(state.roles).filter(function (r) { return state.roles[r].group === g.name && state.scan.roles[r] });
+      return '<div class="grow">' +
+        '<input type="text" id="gn' + i + '" data-i="' + i + '" class="gn" value="' + esc(g.name) + '" aria-label="Group name">' +
+        '<label class="num" for="gm' + i + '">Minimum tracks</label><input type="number" id="gm' + i + '" data-i="' + i + '" class="gm" min="0" max="64" value="' + (g.min_tracks || 0) + '">' +
+        '<span class="hint">' + (used.length ? esc(used.join(", ")) : "No roles yet") + "</span>" +
+        '<button class="btn small gu" data-i="' + i + '" type="button" aria-label="Move up"' + (i === 0 ? " disabled" : "") + ">↑</button>" +
+        '<button class="btn small gx" data-i="' + i + '" type="button" aria-label="Remove group">Remove</button></div>';
+    }).join("");
+  }
+
+  function parseChannels(s) {
+    s = (s || "").trim(); if (!s || /^all$/i.test(s)) return null;
+    var out = [];
+    s.replace(/\s/g, "").split(",").forEach(function (p) {
+      if (!p) return;
+      if (p.indexOf("-") > 0) { var a = p.split("-"); for (var k = +a[0]; k <= +a[1]; k++) out.push(k) } else if (!isNaN(+p)) out.push(+p);
+    });
+    return out.length ? out : null;
+  }
+
+  function renderTracks() {
+    var html = "", count = 0;
+    state.groups.forEach(function (g) {
+      var roles = Object.keys(state.roles).filter(function (r) { return state.roles[r].group === g.name && state.scan.roles[r] });
+      var need = 0, color = "var(--other)";
+      roles.forEach(function (r) {
+        var ch = parseChannels(state.roles[r].channels);
+        need = Math.max(need, ch ? ch.length : state.scan.roles[r].max_channels);
+      });
+      if (roles.length) color = colorFor(roles[0]);
+      var n = Math.max(need, g.min_tracks || 0);
+      for (var k = 1; k <= n; k++) {
+        var empty = k > need;
+        html += '<div class="trk' + (empty ? " empty" : "") + '" style="--c:' + color + '"><i></i><span class="n">' + esc(g.name) + " " + k + '</span><span class="r">' +
+          (empty ? "empty (template)" : esc(roles.join(", "))) + "</span></div>";
+      }
+      if (!n) html += '<div class="trk empty more" style="--c:' + color + '"><i></i><span class="n">' + esc(g.name) + '</span><span class="r">no roles assigned</span></div>';
+      count += n;
+    });
+    $("tracks").innerHTML = html || '<div class="trk empty"><i></i><span class="n">—</span><span class="r">Nothing will export</span></div>';
+    $("trkCount").textContent = count + (count === 1 ? " track" : " tracks");
+  }
+
+  function buildPreset() {
+    var roles = {};
+    Object.keys(state.roles).forEach(function (r) {
+      var m = state.roles[r];
+      if (m.group === "__skip") roles[r] = { skip: true };
+      else { roles[r] = { group: m.group }; var ch = parseChannels(m.channels); if (ch) roles[r].channels = ch }
+    });
+    return { preset_version: 1, name: $("pName").value.trim() || "Untitled preset",
+      groups: state.groups.map(function (g) { return { name: g.name, min_tracks: +g.min_tracks || 0 } }),
+      roles: roles, options: Object.assign({}, state.options) };
+  }
+
+  function renderJSON() { $("json").value = JSON.stringify(buildPreset(), null, 2) }
+  function renderAll() { renderMeta(); renderRoles(); renderGroups(); renderTracks(); renderJSON(); syncOptions() }
+  function renderLive() { renderGroups(); renderTracks(); renderJSON() }
+
+  function syncOptions() {
+    var o = state.options;
+    $("oHandles").value = o.handles_sec; $("oRate").value = o.sample_rate + "/" + o.bit_depth; $("oEdit").value = o.edit_rate; $("oUnmapped").value = o.unmapped;
+    $("oLevels").value = o.levels || "clip_gain"; $("oFades").value = o.fades || "aaf";
+  }
+
+  // ---------- events ----------
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.classList.contains("rg")) { state.roles[t.dataset.role].group = t.value; t.closest("tr").className = t.value === "__skip" ? "skipped" : ""; renderLive() }
+    else if (t.classList.contains("gm")) { state.groups[+t.dataset.i].min_tracks = Math.max(0, +t.value || 0); renderTracks(); renderJSON() }
+    else if (t.classList.contains("gn")) {
+      var g = state.groups[+t.dataset.i], nv = t.value.trim();
+      if (!nv || state.groups.some(function (x, j) { return x.name === nv && j !== +t.dataset.i })) { t.value = g.name; return }
+      Object.keys(state.roles).forEach(function (r) { if (state.roles[r].group === g.name) state.roles[r].group = nv });
+      g.name = nv; renderRoles(); renderLive();
+    }
+    else if (t.id === "oHandles") state.options.handles_sec = Math.max(0, +t.value || 0);
+    else if (t.id === "oRate") { var p = t.value.split("/"); state.options.sample_rate = +p[0]; state.options.bit_depth = +p[1] }
+    else if (t.id === "oEdit") state.options.edit_rate = t.value;
+    else if (t.id === "oUnmapped") state.options.unmapped = t.value;
+    else if (t.id === "oLevels") state.options.levels = t.value;
+    else if (t.id === "oFades") state.options.fades = t.value;
+    renderJSON();
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target.classList.contains("rc")) { state.roles[e.target.dataset.role].channels = e.target.value; renderTracks(); renderJSON() }
+    if (e.target.id === "pName") renderJSON();
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.classList.contains("gu")) { var i = +b.dataset.i; var x = state.groups.splice(i, 1)[0]; state.groups.splice(i - 1, 0, x); renderLive() }
+    if (b.classList.contains("gx")) {
+      var g = state.groups.splice(+b.dataset.i, 1)[0];
+      Object.keys(state.roles).forEach(function (r) { if (state.roles[r].group === g.name) state.roles[r].group = "__skip" });
+      renderRoles(); renderLive();
+    }
+  });
+  $("addGroup").addEventListener("click", function () {
+    var n = 1, name; do { name = "GRP" + n++ } while (state.groups.some(function (g) { return g.name === name }));
+    state.groups.push({ name: name, min_tracks: 1 }); renderRoles(); renderLive();
+    var inputs = document.querySelectorAll(".gn"); var last = inputs[inputs.length - 1]; if (last) { last.focus(); last.select() }
+  });
+
+  // ---------- loading files ----------
+  function loadText(text) {
+    $("loadErr").hidden = true;
+    try { applyScan(scanXML(text), false) } catch (err) { $("loadErr").textContent = err.message; $("loadErr").hidden = false }
+  }
+  function readFile(file) { var r = new FileReader(); r.onload = function () { loadText(r.result) }; r.readAsText(file) }
+  $("pickBtn").addEventListener("click", function () { $("pick").click() });
+  $("pick").addEventListener("change", function () { if (this.files[0]) readFile(this.files[0]); this.value = "" });
+
+  var drop = $("drop");
+  ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over") }) });
+  ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function () { drop.classList.remove("over") }) });
+  drop.addEventListener("drop", function (e) {
+    e.preventDefault();
+    var item = e.dataTransfer.items && e.dataTransfer.items[0];
+    var entry = item && item.webkitGetAsEntry && item.webkitGetAsEntry();
+    if (entry && entry.isDirectory) {
+      entry.createReader().readEntries(function (ents) {
+        var info = ents.filter(function (x) { return x.isFile && /\.fcpxml$/i.test(x.name) })
+          .sort(function (a, b) { return (b.name === "Info.fcpxml") - (a.name === "Info.fcpxml") })[0];
+        if (info) info.file(readFile);
+        else { $("loadErr").textContent = "No Info.fcpxml inside that folder."; $("loadErr").hidden = false }
+      });
+    } else if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+  });
+
+  $("loadPresetBtn").addEventListener("click", function () { $("loadPreset").click() });
+  $("loadPreset").addEventListener("change", function () {
+    var f = this.files[0]; this.value = ""; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var p = JSON.parse(r.result);
+        if (!p || typeof p !== "object" || !("roles" in p || "groups" in p)) throw new Error();
+        state.groups = (p.groups || []).map(function (g) { return { name: g.name, min_tracks: g.min_tracks || 0 } });
+        Object.keys(p.roles || {}).forEach(function (k) {
+          var v = p.roles[k], key = Object.keys(state.roles).find(function (r) { return r.toLowerCase() === k.toLowerCase() }) || k;
+          state.roles[key] = { group: v.skip ? "__skip" : v.group, channels: v.channels ? v.channels.join(",") : "" };
+          if (!v.skip && v.group && !state.groups.some(function (g) { return g.name === v.group })) state.groups.push({ name: v.group, min_tracks: 0 });
+        });
+        Object.assign(state.options, p.options || {});
+        if (p.name) $("pName").value = p.name;
+        applyScan(state.scan, state.isSample);
+        $("saveStatus").textContent = "Opened preset “" + (p.name || f.name) + "”.";
+      } catch (err) { $("saveStatus").textContent = "That file isn't a preset from this page." }
+    };
+    r.readAsText(f);
+  });
+
+  // ---------- saving (downloads capability) ----------
+  var downloadsP = (window.claude && window.claude.use) ? window.claude.use("downloads") : Promise.resolve(null);
+  function slug(s) { return (s || "preset").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "preset" }
+  function explain(err) {
+    var c = err && err.code;
+    if (c === "declined") return "Download cancelled.";
+    if (c === "rate_limited") return "A download prompt is already open. Finish that one first.";
+    return null;
+  }
+  $("saveBtn").addEventListener("click", function () {
+    var st = $("saveStatus");
+    downloadsP.then(function (dl) {
+      if (!dl) { $("jsonBox").open = true; st.textContent = "Downloads are blocked in this view. Open this link in Safari or Chrome, or copy the preset text below into a file ending in .json."; return }
+      return dl.save({ filename: slug($("pName").value) + ".json", data: JSON.stringify(buildPreset(), null, 2) })
+        .then(function () { st.textContent = "Preset saved. Choose it when the converter asks." })
+        .catch(function (err) { st.textContent = explain(err) || "Couldn't save here. Copy the preset text below instead."; if (!explain(err)) $("jsonBox").open = true });
+    });
+  });
+  $("zipBtn").addEventListener("click", function () {
+    var st = $("zipStatus"); st.textContent = "Preparing…";
+    downloadsP.then(function (dl) {
+      if (!dl) { st.textContent = "Downloads are blocked in this view (often the in-app preview). Open this link in Safari or Chrome and try again, or get the zip file directly from whoever shared this page."; return }
+      return fetch("converter-v0.2.b64.txt").then(function (r) { if (!r.ok) throw new Error(); return r.text() })
+        .then(function (b64) {
+          var bin = atob(b64.trim()), bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          return dl.save({ filename: "FCPXML-to-AAF-test-v0.2.zip", data: new Blob([bytes]) });
+        })
+        .then(function () { st.textContent = "Saved. Unzip it and open READ ME FIRST.txt." })
+        .catch(function (err) { st.textContent = explain(err) || "Couldn't download the zip here. Open this link in Safari or Chrome and try again, or get the zip file directly from whoever shared this page." });
+    });
+  });
+  $("copyBtn").addEventListener("click", function () {
+    var ta = $("json"), cs = $("copyStatus");
+    try {
+      navigator.clipboard.writeText(ta.value).then(function () { cs.textContent = "Copied." }, function () { ta.focus(); ta.select(); cs.textContent = "Selected. Press ⌘C to copy." });
+    } catch (e) { ta.focus(); ta.select(); cs.textContent = "Selected. Press ⌘C to copy." }
+  });
+
+  applyScan(SAMPLE, true);
+})();
+</script>

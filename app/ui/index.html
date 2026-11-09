@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FCPXML to AAF</title>
+<style>
+/* Layout: a classic pro-editing workspace. Toolbar; Browser pane (roles, groups, presets) beside a
+   Viewer pane (sequence info, settings, report); a full-width Timeline pane drawing the AAF to be written. */
+:root {
+  --chrome-hi: #6b6b6b; --chrome-lo: #474747; --chrome-line: #1f1f1f; --gutter: #2a2a2a;
+  --tab-hi: #5e5e5e; --tab-lo: #454545; --tab-on-hi: #8a8a8a; --tab-on-lo: #6a6a6a;
+  --text: #e2e2e2; --text-dim: #a9a9a9; --text-dark: #111; --text-mid: #3a3a3a;
+  --list-a: #c9c9c9; --list-b: #bebebe; --list-head-hi: #e9e9e9; --list-head-lo: #c2c2c2; --list-sel: #3875d7;
+  --viewer: #222; --readout: #050505; --readout-text: #e8e8e8;
+  --tl-bg: #7c7c7c; --tl-lane: #858585; --tl-lane-alt: #7f7f7f; --tl-head: #a5a5a5; --tl-ruler: #b4b4b4;
+  --clip-hi: #a7dca3; --clip-lo: #6bb067; --clip-line: #2c5a29; --clip-off-hi: #f08a8a; --clip-off-lo: #c84040;
+  --level: #ff3fa0; --xfade-hi: #d8d8d8; --xfade-lo: #a8a8a8;
+  --aqua-hi: #a9d3ff; --aqua-mid: #3f8fe6; --aqua-lo: #2266c7;
+  --warn: #ffcc4d; --bad: #ff6b5e; --good: #8fdc7f;
+  --ui: "Lucida Grande", "Lucida Sans Unicode", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: Monaco, Menlo, "Andale Mono", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { height: 100%; margin: 0 }
+body { background: var(--gutter); color: var(--text); font: 11px/1.35 var(--ui); overflow: hidden; -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none }
+input, select, textarea, .report, .selectable { user-select: text; -webkit-user-select: text }
+.app { height: 100%; display: grid; grid-template-rows: 34px minmax(0, 1fr) minmax(230px, 46%) 20px; gap: 4px; padding: 0 4px 0 }
+
+/* ---------- controls ---------- */
+.btn { font: 11px var(--ui); color: var(--text-dark); background: linear-gradient(#fdfdfd, #dcdcdc 55%, #cfcfcf); border: 1px solid #5c5c5c;
+  border-radius: 4px; padding: 2px 10px; height: 20px; cursor: default; white-space: nowrap; box-shadow: 0 1px 0 rgba(255,255,255,.12) }
+.btn:active:not(:disabled) { background: linear-gradient(#cfcfcf, #e6e6e6) }
+.btn:disabled { color: #8a8a8a }
+.btn.default { color: #fff; border-color: #1f4f96; text-shadow: 0 -1px 0 rgba(0,0,0,.35);
+  background: linear-gradient(var(--aqua-hi), var(--aqua-mid) 50%, var(--aqua-lo) 51%, #4a9df0) }
+.btn.default:disabled { background: linear-gradient(#e8e8e8, #c8c8c8); color: #888; border-color: #777; text-shadow: none }
+.btn.big { height: 26px; font-size: 12px; padding: 3px 18px; border-radius: 13px }
+.btn.tool { height: 22px; background: linear-gradient(#7c7c7c, #5a5a5a 50%, #4e4e4e 51%, #5a5a5a); color: var(--text); border-color: #232323; text-shadow: 0 -1px 0 #000 }
+.btn.tool:active { background: linear-gradient(#4a4a4a, #5f5f5f) }
+.btn.tool:disabled { color: #8c8c8c; text-shadow: none }
+.btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid #7fb4ff; outline-offset: 1px }
+select, input[type="text"], input[type="number"] { font: 11px var(--ui); color: var(--text-dark); background: #fff; border: 1px solid #6d6d6d; border-radius: 3px; height: 18px; padding: 0 4px }
+select { background: linear-gradient(#fdfdfd, #dedede); padding-right: 2px }
+input[type="range"] { accent-color: #d0d0d0 }
+.mono { font-family: var(--mono) }
+
+/* ---------- toolbar ---------- */
+.toolbar { display: flex; align-items: center; gap: 6px; padding: 0 6px; background: linear-gradient(#777, #565656 50%, #4b4b4b 51%, #545454);
+  border-bottom: 1px solid #111; margin: 0 -4px }
+.toolbar .title { flex: 1; text-align: center; color: #d6d6d6; font-weight: bold; font-size: 12px; text-shadow: 0 -1px 0 #000; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.toolbar .sep { width: 1px; height: 18px; background: #2b2b2b; box-shadow: 1px 0 0 #6d6d6d; margin: 0 2px }
+.lamp { display: inline-flex; align-items: center; gap: 5px; color: var(--text-dim); font-size: 10px; white-space: nowrap }
+.lamp i { width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #d6ffd0, #3bb34a 60%, #1c6a25); box-shadow: 0 0 3px #3bb34a }
+.lamp.off i { background: radial-gradient(circle at 35% 35%, #ffe7c2, #e39b25 60%, #7a4c06); box-shadow: 0 0 3px #e39b25 }
+
+/* ---------- panes ---------- */
+.top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 4px; min-height: 0 }
+.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 1px solid var(--chrome-line); background: #3b3b3b; box-shadow: 0 0 0 1px #4a4a4a inset }
+.tabs { display: flex; align-items: flex-end; gap: 1px; height: 22px; padding: 0 6px; background: linear-gradient(var(--chrome-hi), var(--chrome-lo)); border-bottom: 1px solid #222; flex: none }
+.tab { font: 11px var(--ui); color: #cfcfcf; background: linear-gradient(var(--tab-hi), var(--tab-lo)); border: 1px solid #2a2a2a; border-bottom: 0;
+  border-radius: 5px 5px 0 0; padding: 2px 12px 3px; cursor: default; text-shadow: 0 -1px 0 #000 }
+.tab[aria-selected="true"] { color: #fff; background: linear-gradient(var(--tab-on-hi), var(--tab-on-lo)); font-weight: bold }
+.tabs .spacer { flex: 1 }
+.tabs .cap { color: var(--text-dim); font-size: 10px; padding-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.body { flex: 1; min-height: 0; overflow: auto; position: relative }
+.footer { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 8px; background: linear-gradient(#5c5c5c, #444); border-top: 1px solid #222; min-height: 26px; flex-wrap: wrap }
+.footer .grow { flex: 1 }
+.dim { color: var(--text-dim) }
+
+/* list view (Browser) */
+.list { background: var(--list-a); color: var(--text-dark); min-height: 100% }
+table.lv { border-collapse: collapse; width: 100%; min-width: 540px }
+.lv th { position: sticky; top: 0; z-index: 1; text-align: left; font-weight: normal; color: var(--text-dark); padding: 2px 8px; height: 18px;
+  background: linear-gradient(var(--list-head-hi), var(--list-head-lo)); border-right: 1px solid #9a9a9a; border-bottom: 1px solid #8a8a8a; white-space: nowrap }
+.lv td { padding: 2px 8px; height: 24px; border-right: 1px solid rgba(0,0,0,.06); white-space: nowrap }
+.lv tr:nth-child(even) td { background: var(--list-b) }
+.lv tr.skipped td { color: #6e6e6e }
+.lv tr.skipped .ricon { filter: grayscale(1) opacity(.6) }
+.ricon { display: inline-block; width: 14px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 6px; border: 1px solid rgba(0,0,0,.45);
+  background: linear-gradient(var(--hi, #a7dca3), var(--lo, #6bb067)) }
+.sub { color: var(--text-mid) }
+.badge { display: inline-block; font-size: 9px; padding: 0 4px; border-radius: 3px; background: #9e9e9e; color: #fff; margin-left: 4px; vertical-align: 1px }
+input.ch { width: 64px; font-family: var(--mono); font-size: 10px }
+.empty-list { padding: 28px 18px; color: #4a4a4a; display: grid; gap: 10px; justify-items: start }
+.empty-list h3 { margin: 0; font-size: 13px; color: #222 }
+.recent button { font: 11px var(--mono); background: none; border: 0; color: #1d3f86; padding: 1px 0; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.howto { font-size: 11px; color: #333; line-height: 1.5 }
+.howto ol { margin: 4px 0 0; padding-left: 18px }
+
+/* viewer */
+.viewer { background: var(--viewer); min-height: 100%; padding: 12px; display: grid; gap: 10px; align-content: start }
+.seqname { font-size: 15px; font-weight: bold; color: #f2f2f2; overflow-wrap: anywhere }
+.path { font: 10px var(--mono); color: #8d8d8d; overflow-wrap: anywhere }
+.readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px }
+.readout { display: grid; gap: 3px }
+.readout .k { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #8f8f8f }
+.readout .v { font: 13px var(--mono); color: var(--readout-text); background: var(--readout); border: 1px solid #000; border-radius: 3px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.9), 0 1px 0 #3b3b3b; padding: 3px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.readout .v.tc { color: #f3e7a6 }
+.alerts { display: grid; gap: 6px }
+.alert { border: 1px solid #000; border-radius: 3px; padding: 6px 8px; background: #3a3426; color: #f4e2b0; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap }
+.alert.bad { background: #4a2020; color: #ffd2cc }
+.settings { background: #333; min-height: 100%; padding: 14px 16px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 9px 12px; align-content: start; align-items: center }
+.settings label { text-align: right; color: #ddd }
+.settings .help { grid-column: 2; color: var(--text-dim); font-size: 10px; margin-top: -5px }
+.settings select, .settings input { justify-self: start }
+.report { margin: 0; padding: 10px 12px; font: 10px/1.45 var(--mono); color: #d8d8d8; background: #1b1b1b; min-height: 100%; white-space: pre-wrap }
+.presets { display: grid; gap: 0 }
+
+/* timeline */
+.tl { display: grid; grid-template-columns: 112px minmax(0, 1fr); flex: 1; min-height: 0; background: var(--tl-bg) }
+.heads { overflow: hidden; background: #8d8d8d; border-right: 1px solid #3c3c3c; position: relative }
+.heads .rulerpad { height: 22px; background: linear-gradient(#c9c9c9, #a9a9a9); border-bottom: 1px solid #555; color: #222; font: 10px var(--mono); padding: 4px 6px; white-space: nowrap; overflow: hidden }
+.thead { height: 36px; border-bottom: 1px solid #5f5f5f; display: flex; align-items: center; gap: 6px; padding: 0 6px; background: linear-gradient(#b4b4b4, #9d9d9d); color: #111 }
+.thead .patch { font: bold 10px var(--ui); min-width: 34px; text-align: center; border-radius: 3px; padding: 2px 3px; color: #fff; background: linear-gradient(#6aa765, #3b7c37); border: 1px solid #234d20; text-shadow: 0 -1px 0 rgba(0,0,0,.4) }
+.thead.empty .patch { background: linear-gradient(#9a9a9a, #7a7a7a); border-color: #555 }
+.thead .lights { display: flex; gap: 3px; margin-left: auto }
+.thead .lights i { width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e8ffe3, #3ab04a 60%, #1d6a26); border: 1px solid #1d4a20 }
+.thead.empty .lights i { background: radial-gradient(circle at 35% 35%, #f3f3f3, #9a9a9a 60%, #5d5d5d); border-color: #555 }
+.lanes { overflow: auto; position: relative }
+.canvas { position: relative; min-width: 100% }
+.ruler { position: sticky; top: 0; height: 22px; background: linear-gradient(#cfcfcf, #ababab); border-bottom: 1px solid #555; z-index: 3 }
+.ruler .tick { position: absolute; bottom: 0; width: 1px; background: #333 }
+.ruler .lbl { position: absolute; top: 2px; font: 9px var(--mono); color: #1a1a1a; padding-left: 3px; white-space: nowrap }
+.lane { position: relative; height: 36px; border-bottom: 1px solid #6a6a6a; background: var(--tl-lane) }
+.lane:nth-child(odd) { background: var(--tl-lane-alt) }
+.clip { position: absolute; top: 3px; height: 29px; border: 1px solid var(--clip-line); border-radius: 2px; overflow: hidden; cursor: default;
+  background: linear-gradient(var(--clip-hi), var(--clip-lo)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35) }
+.clip.offline { background: linear-gradient(var(--clip-off-hi), var(--clip-off-lo)); border-color: #6d1313 }
+.clip.sel { box-shadow: 0 0 0 2px #1d1d1d, inset 0 0 0 1px #fff }
+.clip .nm { position: absolute; left: 4px; top: 1px; right: 4px; font: 10px var(--ui); color: #102010; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2 }
+.clip svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1 }
+.xfade { position: absolute; top: 3px; height: 29px; z-index: 4; border: 1px solid #333; border-radius: 2px; overflow: hidden;
+  background: linear-gradient(var(--xfade-hi), var(--xfade-lo)); font: 9px var(--ui); color: #111; display: flex; align-items: center; justify-content: center; white-space: nowrap }
+.xfade svg { position: absolute; inset: 0; width: 100% ; height: 100% }
+.xfade span { position: relative; padding: 0 2px; background: rgba(216,216,216,.8) }
+.tl-empty { position: absolute; inset: 22px 0 0; display: grid; place-items: center; color: #333; font-size: 12px; text-align: center; padding: 20px }
+
+/* status bar */
+.status { display: flex; align-items: center; gap: 10px; padding: 0 6px; background: linear-gradient(#4f4f4f, #3d3d3d); border-top: 1px solid #222; margin: 0 -4px;
+  color: var(--text-dim); font-size: 10px; white-space: nowrap; overflow: hidden }
+.status .msg { flex: 1; overflow: hidden; text-overflow: ellipsis }
+.ok { color: var(--good) } .err { color: var(--bad) } .warn { color: var(--warn) }
+
+/* modal progress window */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 20 }
+.win { width: min(420px, 92vw); background: #e8e8e8; color: #111; border: 1px solid #555; border-radius: 6px; box-shadow: 0 14px 40px rgba(0,0,0,.6); overflow: hidden }
+.win .tbar { height: 22px; background: linear-gradient(#ededed, #c3c3c3); border-bottom: 1px solid #8a8a8a; text-align: center; font-size: 12px; line-height: 22px; color: #222; position: relative }
+.win .tbar i { position: absolute; left: 8px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffb3a8, #e0443a 60%, #8d1b14); border: 1px solid #7a2a24 }
+.win .wbody { padding: 16px 18px 18px; display: grid; gap: 10px }
+.pbar { height: 14px; border: 1px solid #7a7a7a; border-radius: 7px; background: linear-gradient(#cfcfcf, #f2f2f2); overflow: hidden }
+.pbar i { display: block; height: 100%; width: 0; border-radius: 7px; transition: width .3s;
+  background: repeating-linear-gradient(-45deg, rgba(255,255,255,.25) 0 6px, rgba(255,255,255,0) 6px 12px), linear-gradient(var(--aqua-hi), var(--aqua-mid) 50%, var(--aqua-lo) 51%, #4a9df0);
+  background-size: 17px 17px, 100% 100%; animation: barber 0.8s linear infinite }
+@keyframes barber { to { background-position: 17px 0, 0 0 } }
+@media (prefers-reduced-motion: reduce) { .pbar i { animation: none } * { transition: none !important } }
+@media (max-width: 980px) { .top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) } .tab { padding: 2px 8px 3px } }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- toolbar -->
+  <div class="toolbar">
+    <button class="btn tool" type="button" data-choose="file">Open FCPXML…</button>
+    <button class="btn tool" type="button" data-choose="bundle">Open .fcpxmld…</button>
+    <button class="btn tool" type="button" id="sampleBtn" hidden>Sample Project</button>
+    <span class="sep"></span>
+    <button class="btn tool" type="button" id="locateTool" disabled>Locate Media…</button>
+    <div class="title" id="winTitle">FCPXML to AAF</div>
+    <span class="lamp" id="ffLamp"><i></i><span>Audio engine</span></span>
+    <span class="lamp" id="verLamp" style="color:#8a8a8a"></span>
+  </div>
+
+  <!-- browser + viewer -->
+  <div class="top">
+    <div class="pane" id="browser">
+      <div class="tabs" role="tablist" aria-label="Browser">
+        <button class="tab" role="tab" aria-selected="true" data-tab="b-roles" type="button">Roles</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="b-groups" type="button">Track Groups</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="b-presets" type="button">Presets</button>
+        <span class="spacer"></span><span class="cap" id="browserCap">Browser</span>
+      </div>
+      <div class="body" id="b-roles">
+        <div class="list">
+          <div class="empty-list" id="emptyList">
+            <h3>No FCPXML open</h3>
+            <div class="howto">To get one out of Final Cut Pro:<ol><li>Select the project in the browser.</li><li>Choose File ▸ Export XML…</li><li>Open the saved file here with <b>Open FCPXML…</b></li></ol></div>
+            <div id="recentBox" hidden><b>Recent</b><div class="recent" id="recent"></div></div>
+            <div class="err" id="emptyErr"></div>
+          </div>
+          <table class="lv" id="roleTable" hidden>
+            <thead><tr><th>Name</th><th>Clips</th><th>Channels</th><th>Send To</th><th>Use Channels</th></tr></thead>
+            <tbody id="roleRows"></tbody></table>
+        </div>
+      </div>
+      <div class="body" id="b-groups" hidden>
+        <div class="list"><table class="lv"><thead><tr><th>Group</th><th>Min Tracks</th><th>Roles</th><th></th></tr></thead><tbody id="groupRows"></tbody></table></div>
+      </div>
+      <div class="body" id="b-presets" hidden>
+        <div class="list"><table class="lv"><thead><tr><th>Preset</th><th>Groups</th><th></th></tr></thead><tbody id="presetRows"></tbody></table></div>
+      </div>
+      <div class="footer">
+        <span id="browserFoot" class="dim">Every channel becomes a mono track.</span><span class="grow"></span>
+        <span id="groupTools" hidden><button class="btn" id="addGroup" type="button">New Group</button></span>
+        <span id="presetTools" hidden style="display:inline-flex;gap:6px;align-items:center">
+          <input type="text" id="pName" aria-label="Preset name" placeholder="Preset name" style="width:170px">
+          <button class="btn" id="savePreset" type="button">Save</button>
+          <button class="btn" id="importPreset" type="button">Import…</button></span>
+      </div>
+    </div>
+
+    <div class="pane" id="viewer">
+      <div class="tabs" role="tablist" aria-label="Viewer">
+        <button class="tab" role="tab" aria-selected="true" data-tab="v-seq" type="button">Sequence</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="v-settings" type="button">Export Settings</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="v-report" type="button">Report</button>
+      </div>
+      <div class="body" id="v-seq">
+        <div class="viewer">
+          <div><div class="seqname" id="seqName">No sequence</div><div class="path selectable" id="seqPath">Open an FCPXML, or try the built-in sample.</div></div>
+          <div class="readouts" id="readouts"></div>
+          <div class="alerts" id="alerts"></div>
+          <div><button class="btn" type="button" id="sampleBtn2" hidden>Open Sample Project</button></div>
+        </div>
+      </div>
+      <div class="body" id="v-settings" hidden>
+        <div class="settings">
+          <label for="oLevels">Volume levels:</label><select id="oLevels"><option value="clip_gain">As clip gain</option><option value="off">Leave out (flat levels)</option></select>
+          <span class="help">Clip volume and keyframes become clip gain. Audio is never altered.</span>
+          <label for="oFades">Fades:</label><select id="oFades"><option value="aaf">As real fades and crossfades</option><option value="gain">Drawn into clip gain</option><option value="off">Leave out</option></select>
+          <span class="help">Use “drawn into clip gain” if Pro Tools drops the fades.</span>
+          <label for="oHandles">Handles:</label><span><input type="number" id="oHandles" min="0" max="60" step="1" value="5" style="width:52px"> seconds</span>
+          <label for="oRate">Audio format:</label><select id="oRate"><option value="48000/24">48 kHz, 24-bit</option><option value="48000/16">48 kHz, 16-bit</option><option value="96000/24">96 kHz, 24-bit</option></select>
+          <label for="oEdit">Timing:</label><select id="oEdit"><option value="frame">Frame-based (Avid style)</option><option value="sample">Sample-accurate</option></select>
+          <span class="help">Try sample-accurate if Pro Tools rejects the file.</span>
+          <label for="oUnmapped">Unlisted roles:</label><select id="oUnmapped"><option value="by_main_role">Group by main role</option><option value="by_subrole">One group per subrole</option><option value="skip">Leave them out</option></select>
+        </div>
+      </div>
+      <div class="body" id="v-report" hidden><pre class="report" id="report">No export yet.</pre></div>
+      <div class="footer">
+        <span class="dim">Destination:</span><span class="mono selectable" id="outPath" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ddd">—</span>
+        <button class="btn" type="button" id="changeOut" disabled>Change…</button>
+        <button class="btn" type="button" id="revealBtn" hidden>Show in Finder</button>
+        <button class="btn default big" type="button" id="exportBtn" disabled>Export AAF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- timeline -->
+  <div class="pane" id="timeline">
+    <div class="tabs" role="tablist" aria-label="Timeline">
+      <button class="tab" role="tab" aria-selected="true" type="button" id="tlTab">AAF Preview</button>
+      <span class="spacer"></span><span class="cap">What the AAF will contain</span>
+    </div>
+    <div class="tl">
+      <div class="heads" id="heads"><div class="rulerpad" id="tcPad">--:--:--:--</div></div>
+      <div class="lanes" id="lanesWrap">
+        <div class="canvas" id="canvas"><div class="ruler" id="ruler"></div><div id="lanes"></div></div>
+        <div class="tl-empty" id="tlEmpty">The tracks in your AAF appear here once a sequence is open.</div>
+      </div>
+    </div>
+    <div class="footer">
+      <label class="dim" for="zoom">Zoom</label><input type="range" id="zoom" min="0" max="100" value="0" style="width:120px">
+      <span class="grow"></span><span class="dim" id="tlInfo"></span>
+    </div>
+  </div>
+
+  <div class="status"><span class="msg" id="statusMsg">Ready.</span><span id="statusRight"></span></div>
+</div>
+
+<div class="scrim" id="progressWin" hidden>
+  <div class="win" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+    <div class="tbar"><i></i><span id="pwTitle">Writing AAF</span></div>
+    <div class="wbody"><div id="pwText">Reading timeline…</div><div class="pbar"><i id="pwBar"></i></div><div class="dim" style="color:#555" id="pwSub"></div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var TOKEN = location.hash.slice(1);
+  var $ = function (id) { return document.getElementById(id) };
+  function api(name, body) {
+    return fetch("/api/" + name, { method: "POST", headers: { "Content-Type": "application/json", "X-Token": TOKEN }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json() }).then(function (j) { if (j && j.error) throw new Error(j.error); return j });
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] }) }
+  function status(msg, cls) { $("statusMsg").textContent = msg; $("statusMsg").className = "msg " + (cls || "") }
+  var DEFAULT_GROUP = { dialogue: "DX", music: "MX", effects: "FX" };
+  var ROLE_COL = { dialogue: ["#a9c4ff", "#5f85d6"], music: ["#a7dca3", "#5fa65b"], effects: ["#d4b8ff", "#8f63d6"] };
+  function mainOf(r) { return r.split(".")[0].toLowerCase() }
+  function roleCol(r) { return ROLE_COL[mainOf(r)] || ["#d5d5d5", "#999"] }
+
+  var S = { scan: null, roles: {}, groups: [], mediaRoots: [], out: null, project: null, presets: [], pv: null, zoom: 0, sel: null,
+    options: { handles_sec: 5, sample_rate: 48000, bit_depth: 24, edit_rate: "frame", unmapped: "by_main_role", levels: "clip_gain", fades: "aaf" } };
+
+  // ---------- tabs ----------
+  document.querySelectorAll(".tabs").forEach(function (bar) {
+    bar.addEventListener("click", function (e) {
+      var t = e.target.closest(".tab[data-tab]"); if (!t) return;
+      selectTab(t.dataset.tab);
+    });
+  });
+  function selectTab(id) {
+    var t = document.querySelector('.tab[data-tab="' + id + '"]'), bar = t.parentElement;
+    bar.querySelectorAll(".tab[data-tab]").forEach(function (x) { x.setAttribute("aria-selected", x === t ? "true" : "false"); $(x.dataset.tab).hidden = x !== t });
+    if (bar.parentElement.id === "browser") {
+      $("groupTools").hidden = id !== "b-groups"; $("presetTools").hidden = id !== "b-presets";
+      $("browserFoot").textContent = id === "b-roles" ? "Every channel becomes a mono track." : id === "b-groups" ? "Tracks are named DX 1, DX 2… in this order." : "Saved on this Mac.";
+    }
+  }
+
+  // ---------- start ----------
+  api("hello").then(function (h) {
+    $("verLamp").textContent = "v" + h.version;
+    $("ffLamp").className = "lamp" + (h.ffmpeg ? "" : " off");
+    $("ffLamp").title = h.ffmpeg ? "Audio engine ready (reads .mov, .mp4, .wav, .aif…)" : "ffmpeg missing: audio inside .mov/.mp4 won't convert";
+    if (h.sample) { [$("sampleBtn"), $("sampleBtn2")].forEach(function (b) { b.hidden = false; b.onclick = function () { openPath(h.sample) } }) }
+    if (h.recent && h.recent.length) {
+      $("recentBox").hidden = false;
+      $("recent").innerHTML = h.recent.map(function (p) { return '<div><button type="button" data-path="' + esc(p) + '" title="' + esc(p) + '">' + esc(p.split("/").pop()) + "</button></div>" }).join("");
+    }
+    loadPresets();
+  }).catch(function (e) { status("The audio engine didn't start: " + e.message, "err") });
+  setInterval(function () { api("beat").catch(function () {}) }, 20000);
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-choose]");
+    if (b) { api("choose", { kind: b.getAttribute("data-choose") }).then(function (r) { if (r.path) openPath(r.path) }).catch(function (er) { status(er.message, "err") }); return }
+    var r = e.target.closest("[data-path]");
+    if (r) openPath(r.getAttribute("data-path"));
+  });
+
+  function openPath(path, project) {
+    status("Reading " + path.split("/").pop() + "…");
+    api("scan", { path: path, project: project || null, media_roots: S.mediaRoots }).then(function (info) {
+      S.scan = info; S.project = project || null; S.out = info.default_out;
+      Object.keys(info.roles).forEach(function (role) {
+        if (!S.roles[role]) S.roles[role] = { group: DEFAULT_GROUP[mainOf(role)] || role.split(".")[0], channels: "" };
+      });
+      ensureGroups();
+      $("emptyList").hidden = true; $("roleTable").hidden = false;
+      ["exportBtn", "changeOut", "locateTool"].forEach(function (id) { $(id).disabled = false });
+      renderAll();
+      status("Opened " + info.name + ".", "ok");
+    }).catch(function (e) { status("Couldn't read that file. " + e.message, "err"); $("emptyErr").textContent = e.message });
+  }
+  function ensureGroups() {
+    var order = ["DX", "MX", "FX"];
+    Object.keys(S.scan.roles).forEach(function (role) {
+      var g = S.roles[role].group;
+      if (g && g !== "__skip" && !S.groups.some(function (x) { return x.name === g })) {
+        var entry = { name: g, min_tracks: 0 }, idx = order.indexOf(g);
+        if (idx >= 0) { var at = S.groups.findIndex(function (x) { var j = order.indexOf(x.name); return j < 0 || j > idx }); if (at < 0) S.groups.push(entry); else S.groups.splice(at, 0, entry) }
+        else S.groups.push(entry);
+      }
+    });
+  }
+
+  // ---------- render ----------
+  function renderAll() { renderSeq(); renderRoles(); renderGroups(); renderOptions(); $("outPath").textContent = S.out || "—"; $("outPath").title = S.out || ""; refreshPreview() }
+
+  function renderSeq() {
+    var s = S.scan;
+    $("winTitle").textContent = s.timeline + (s.is_sample ? " (Sample)" : "");
+    $("browserCap").textContent = s.name;
+    $("tlTab").textContent = s.timeline;
+    $("seqName").textContent = s.timeline;
+    $("seqPath").textContent = s.path;
+    var ro = [["Start", s.start_timecode, 1], ["Duration", s.length, 1], ["Frame Rate", s.fps + (s.drop_frame ? " DF" : " NDF")], ["Audio", s.audio_rate / 1000 + " kHz"],
+      ["Media Files", s.media_files], ["Cross Fades", s.crossfades], ["FCPXML", "v" + s.fcpxml_version]];
+    if (s.projects.length > 1) ro.push(["Project", '<select id="projectSel">' + s.projects.map(function (p) { return "<option" + (p === s.timeline ? " selected" : "") + ">" + esc(p) + "</option>" }).join("") + "</select>", 0, 1]);
+    $("readouts").innerHTML = ro.map(function (r) { return '<div class="readout"><span class="k">' + r[0] + '</span>' + (r[3] ? r[1] : '<span class="v' + (r[2] ? " tc" : "") + '">' + esc(r[1]) + "</span>") + "</div>" }).join("");
+    var al = "";
+    if (s.missing_media.length) al += '<div class="alert bad"><span><b>' + s.missing_media.length + " media file" + (s.missing_media.length > 1 ? "s" : "") + " offline.</b> " + esc(s.missing_media[0].split("/").pop()) + (s.missing_media.length > 1 ? " and others" : "") +
+      '</span><button class="btn" type="button" id="locateBtn">Locate Media…</button></div>';
+    (s.warnings || []).forEach(function (w) { al += '<div class="alert">' + esc(w) + "</div>" });
+    $("alerts").innerHTML = al;
+    if ($("locateBtn")) $("locateBtn").onclick = locate;
+    $("sampleBtn2").hidden = true;
+  }
+  function locate() {
+    if (!S.scan) return;
+    api("choose", { kind: "media" }).then(function (r) { if (r.path) { S.mediaRoots.push(r.path); openPath(S.scan.path, S.project) } });
+  }
+  $("locateTool").onclick = locate;
+
+  function sortedRoles() {
+    var rank = { dialogue: 0, music: 1, effects: 2 };
+    return Object.keys(S.scan.roles).sort(function (a, b) {
+      var ra = rank[mainOf(a)] == null ? 3 : rank[mainOf(a)], rb = rank[mainOf(b)] == null ? 3 : rank[mainOf(b)];
+      return ra - rb || a.localeCompare(b);
+    });
+  }
+  function groupOptions(sel) {
+    return S.groups.map(function (g) { return '<option value="' + esc(g.name) + '"' + (g.name === sel ? " selected" : "") + ">" + esc(g.name) + "</option>" }).join("") +
+      '<option value="__skip"' + (sel === "__skip" ? " selected" : "") + ">Don't Export</option>";
+  }
+  function renderRoles() {
+    $("roleRows").innerHTML = sortedRoles().map(function (role, i) {
+      var info = S.scan.roles[role], m = S.roles[role], parts = role.split("."), c = roleCol(role);
+      return '<tr class="' + (m.group === "__skip" ? "skipped" : "") + '"><td><span class="ricon" style="--hi:' + c[0] + ";--lo:" + c[1] + '"></span>' + esc(parts[0]) +
+        (parts[1] ? ' <span class="sub">▸ ' + esc(parts.slice(1).join(".")) + "</span>" : "") +
+        (info.levels ? '<span class="badge">levels</span>' : "") + (info.fades ? '<span class="badge">fades</span>' : "") + "</td>" +
+        "<td>" + info.clips + "</td><td>" + info.max_channels + "</td>" +
+        '<td><select id="rg' + i + '" class="rg" data-role="' + esc(role) + '" aria-label="Group for ' + esc(role) + '">' + groupOptions(m.group) + "</select></td>" +
+        '<td><input type="text" id="rc' + i + '" class="ch rc" data-role="' + esc(role) + '" placeholder="all" value="' + esc(m.channels) + '" aria-label="Channels for ' + esc(role) + '"></td></tr>';
+    }).join("");
+  }
+  function renderGroups() {
+    $("groupRows").innerHTML = S.groups.map(function (g, i) {
+      var used = Object.keys(S.roles).filter(function (r) { return S.roles[r].group === g.name && S.scan && S.scan.roles[r] });
+      return '<tr><td><input type="text" id="gn' + i + '" class="gn" data-i="' + i + '" value="' + esc(g.name) + '" aria-label="Group name" style="width:80px;font-family:var(--mono)"></td>' +
+        '<td><input type="number" id="gm' + i + '" class="gm" data-i="' + i + '" min="0" max="64" value="' + (g.min_tracks || 0) + '" aria-label="Minimum tracks" style="width:52px"></td>' +
+        '<td style="white-space:normal">' + (used.length ? esc(used.join(", ")) : '<span class="sub">none</span>') + "</td>" +
+        '<td style="text-align:right"><button class="btn gu" data-i="' + i + '" type="button" aria-label="Move up"' + (i === 0 ? " disabled" : "") + '>▲</button> <button class="btn gx" data-i="' + i + '" type="button">Remove</button></td></tr>';
+    }).join("") || '<tr><td colspan="4" class="sub">No groups yet.</td></tr>';
+  }
+  function renderOptions() {
+    var o = S.options;
+    $("oHandles").value = o.handles_sec; $("oRate").value = o.sample_rate + "/" + o.bit_depth; $("oEdit").value = o.edit_rate;
+    $("oUnmapped").value = o.unmapped; $("oLevels").value = o.levels; $("oFades").value = o.fades;
+  }
+
+  function parseChannels(s) {
+    s = (s || "").trim(); if (!s || /^all$/i.test(s)) return null;
+    var out = [];
+    s.replace(/\s/g, "").split(",").forEach(function (p) {
+      if (!p) return;
+      if (p.indexOf("-") > 0) { var a = p.split("-"); for (var k = +a[0]; k <= +a[1]; k++) out.push(k) } else if (!isNaN(+p)) out.push(+p);
+    });
+    return out.length ? out : null;
+  }
+  function buildPreset() {
+    var roles = {};
+    Object.keys(S.roles).forEach(function (r) {
+      var m = S.roles[r];
+      if (m.group === "__skip") roles[r] = { skip: true };
+      else { roles[r] = { group: m.group }; var ch = parseChannels(m.channels); if (ch) roles[r].channels = ch }
+    });
+    return { preset_version: 1, name: $("pName").value.trim() || "Untitled preset",
+      groups: S.groups.map(function (g) { return { name: g.name, min_tracks: +g.min_tracks || 0 } }), roles: roles, options: Object.assign({}, S.options) };
+  }
+
+  // ---------- timeline ----------
+  var pvTimer = null, pvSeq = 0;
+  function refreshPreview() {
+    clearTimeout(pvTimer);
+    pvTimer = setTimeout(function () {
+      if (!S.scan) return;
+      var seq = ++pvSeq;
+      api("preview", { path: S.scan.path, project: S.project, preset: buildPreset(), media_roots: S.mediaRoots }).then(function (r) {
+        if (seq !== pvSeq) return;
+        S.pv = r; drawTimeline();
+      }).catch(function (e) { status(e.message, "err") });
+    }, 120);
+  }
+  function tc(sec) {
+    var pv = S.pv, fps = Math.round(pv.fps), fr = Math.round((sec + pv.tc_start) * pv.fps);
+    var f = fr % fps, s = Math.floor(fr / fps) % 60, m = Math.floor(fr / (fps * 60)) % 60, h = Math.floor(fr / (fps * 3600));
+    var p = function (n) { return (n < 10 ? "0" : "") + n };
+    return p(h) + ":" + p(m) + ":" + p(s) + (pv.drop ? ";" : ":") + p(f);
+  }
+  function pxPerSec() {
+    var w = Math.max(200, $("lanesWrap").clientWidth - 24), dur = Math.max(1, S.pv.duration);
+    var fit = w / dur;
+    return fit * Math.pow(40, S.zoom / 100);  // slider: fit-to-window … 40× closer
+  }
+  var DB_TOP = 12, DB_BOT = -60;
+  function yFor(db) { return Math.max(0, Math.min(1, (DB_TOP - db) / (DB_TOP - DB_BOT))) * 100 }
+  function drawTimeline() {
+    var pv = S.pv; if (!pv) return;
+    var z = pxPerSec(), W = Math.ceil(pv.duration * z) + 40;
+    $("tlEmpty").hidden = pv.tracks.length > 0;
+    if (!pv.tracks.length) $("tlEmpty").textContent = "Nothing will be exported. Check Send To in the Roles tab.";
+    $("canvas").style.width = W + "px";
+    // ruler: pick a step that leaves room for a timecode label
+    var steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800], step = steps.find(function (s) { return s * z >= 90 }) || 3600;
+    var minor = step / 5, html = "";
+    for (var t = 0; t <= pv.duration + 0.001; t += minor) {
+      var major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
+      html += '<div class="tick" style="left:' + (t * z).toFixed(1) + "px;height:" + (major ? 9 : 4) + 'px"></div>';
+      if (major) html += '<div class="lbl" style="left:' + (t * z).toFixed(1) + 'px">' + tc(t) + "</div>";
+    }
+    $("ruler").innerHTML = html;
+    // track headers
+    var heads = '<div class="rulerpad" id="tcPad">' + tc(0) + "</div>";
+    pv.tracks.forEach(function (t, i) {
+      heads += '<div class="thead' + (t.clips ? "" : " empty") + '" title="' + esc(t.roles.join(", ") || "empty") + '"><span class="patch">' + esc(t.name) + '</span><span class="lights"><i></i><i></i></span></div>';
+    });
+    $("heads").innerHTML = heads;
+    // lanes
+    var lanes = "";
+    pv.tracks.forEach(function (t, ti) {
+      lanes += '<div class="lane">';
+      t.items.forEach(function (it, ii) {
+        var x = it.s * z, w = Math.max(2, (it.e - it.s) * z), id = ti + "-" + ii;
+        // a real crossfade only when the previous clip on this track overlaps this one; otherwise it's a fade from silence
+        var prev = t.items[ii - 1];
+        it.xreal = !!(it.xin && it.fi && prev && prev.e > it.s + 1e-6);
+        var next = t.items[ii + 1];
+        it.xoreal = !!(it.xout && it.fo && next && next.s < it.e - 1e-6);
+        var nmLeft = it.xreal ? Math.max(6, it.fi * z) + 4 : 4;
+        lanes += '<div class="clip' + (it.offline ? " offline" : "") + (S.sel === id ? " sel" : "") + '" data-clip="' + id + '" style="left:' + x.toFixed(1) + "px;width:" + w.toFixed(1) + 'px">' +
+          '<span class="nm" style="left:' + nmLeft.toFixed(0) + 'px">' + esc(it.name) + "</span>" + clipSvg(it, w) + "</div>";
+        if (it.xreal) {
+          var xw = Math.max(6, it.fi * z);
+          lanes += '<div class="xfade" style="left:' + x.toFixed(1) + "px;width:" + xw.toFixed(1) + 'px" title="Cross Fade ' + it.fi.toFixed(2) + ' s">' +
+            '<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0 100 L100 0 M0 0 L100 100" stroke="#555" stroke-width="2" vector-effect="non-scaling-stroke" fill="none"/></svg>' +
+            (xw > 70 ? "<span>Cross Fade</span>" : "") + "</div>";
+        }
+      });
+      lanes += "</div>";
+    });
+    $("lanes").innerHTML = lanes;
+    var n = pv.tracks.length, off = pv.offline_clips;
+    $("tlInfo").innerHTML = n + " track" + (n === 1 ? "" : "s") + " · " + pv.tracks.reduce(function (a, t) { return a + t.clips }, 0) + " clips" +
+      (off ? ' · <span class="err">' + off + " offline</span>" : "");
+  }
+  function clipSvg(it, w) {
+    // level line (pink) and fade wedges, drawn in a 0..100 box over the clip
+    var dur = it.e - it.s, pts;
+    if (it.gain && it.gain.length > 1) pts = it.gain.map(function (p) { return [((p[0] - it.s) / dur) * 100, yFor(p[1])] });
+    else { var db = it.gain ? it.gain[0][1] : 0; pts = [[0, yFor(db)], [100, yFor(db)]] }
+    if (pts[0][0] > 0) pts.unshift([0, pts[0][1]]);
+    if (pts[pts.length - 1][0] < 100) pts.push([100, pts[pts.length - 1][1]]);
+    var fade = "";
+    if (it.fi && !it.xreal) { var a = (it.fi / dur) * 100; fade += '<path d="M0 100 L0 0 L' + a.toFixed(2) + ' 0 Z" fill="rgba(0,0,0,.28)"/>' }
+    if (it.fo && !it.xoreal) { var b = 100 - (it.fo / dur) * 100; fade += '<path d="M100 100 L100 0 L' + b.toFixed(2) + ' 0 Z" fill="rgba(0,0,0,.28)"/>' }
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' + fade +
+      '<polyline points="' + pts.map(function (p) { return p[0].toFixed(2) + "," + p[1].toFixed(2) }).join(" ") + '" fill="none" stroke="var(--level)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>';
+  }
+  $("lanesWrap").addEventListener("scroll", function () { $("heads").scrollTop = $("lanesWrap").scrollTop });
+  $("heads").addEventListener("wheel", function (e) { $("lanesWrap").scrollTop += e.deltaY; e.preventDefault() }, { passive: false });
+  $("zoom").addEventListener("input", function () {
+    var wrap = $("lanesWrap"), old = pxPerSec(), mid = (wrap.scrollLeft + wrap.clientWidth / 2) / old;
+    S.zoom = +this.value; drawTimeline(); wrap.scrollLeft = mid * pxPerSec() - wrap.clientWidth / 2;
+  });
+  window.addEventListener("resize", function () { if (S.pv) drawTimeline() });
+  $("lanes").addEventListener("click", function (e) {
+    var c = e.target.closest("[data-clip]"); if (!c) return;
+    S.sel = c.dataset.clip;
+    document.querySelectorAll(".clip.sel").forEach(function (x) { x.classList.remove("sel") }); c.classList.add("sel");
+    var ix = S.sel.split("-"), t = S.pv.tracks[+ix[0]], it = t.items[+ix[1]];
+    var g = it.gain ? (it.gain.length > 1 ? "level " + Math.min.apply(null, it.gain.map(function (p) { return p[1] })).toFixed(1) + " to " + Math.max.apply(null, it.gain.map(function (p) { return p[1] })).toFixed(1) + " dB" : "level " + it.gain[0][1].toFixed(1) + " dB") : "level 0 dB";
+    status(t.name + " · " + it.name + " (ch " + it.ch + ", " + it.role + ") · In " + tc(it.s) + " · Out " + tc(it.e) + " · " + g +
+      (it.fi ? " · " + (it.xreal ? "cross fade" : "fade in") + " " + it.fi.toFixed(2) + " s" : "") + (it.fo && !it.xoreal ? " · fade out " + it.fo.toFixed(2) + " s" : "") +
+      (it.offline ? " · MEDIA OFFLINE" : ""), it.offline ? "err" : "");
+  });
+  $("ruler").addEventListener("mousemove", function (e) {
+    if (!S.pv) return; var r = $("canvas").getBoundingClientRect();
+    $("tcPad").textContent = tc(Math.max(0, Math.min(S.pv.duration, (e.clientX - r.left) / pxPerSec())));
+  });
+
+  // ---------- edits ----------
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.classList.contains("rg")) { S.roles[t.dataset.role].group = t.value; t.closest("tr").className = t.value === "__skip" ? "skipped" : ""; renderGroups() }
+    else if (t.classList.contains("gm")) S.groups[+t.dataset.i].min_tracks = Math.max(0, +t.value || 0);
+    else if (t.classList.contains("gn")) {
+      var g = S.groups[+t.dataset.i], nv = t.value.trim();
+      if (!nv || S.groups.some(function (x, j) { return x.name === nv && j !== +t.dataset.i })) { t.value = g.name; return }
+      Object.keys(S.roles).forEach(function (r) { if (S.roles[r].group === g.name) S.roles[r].group = nv });
+      g.name = nv; if (S.scan) renderRoles(); renderGroups();
+    }
+    else if (t.id === "oHandles") S.options.handles_sec = Math.max(0, +t.value || 0);
+    else if (t.id === "oRate") { var p = t.value.split("/"); S.options.sample_rate = +p[0]; S.options.bit_depth = +p[1] }
+    else if (t.id === "oEdit") S.options.edit_rate = t.value;
+    else if (t.id === "oUnmapped") S.options.unmapped = t.value;
+    else if (t.id === "oLevels") S.options.levels = t.value;
+    else if (t.id === "oFades") S.options.fades = t.value;
+    else if (t.id === "projectSel") { openPath(S.scan.path, t.value); return }
+    else return;
+    refreshPreview();
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target.classList.contains("rc")) { S.roles[e.target.dataset.role].channels = e.target.value; refreshPreview() }
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.classList.contains("gu")) { var i = +b.dataset.i, x = S.groups.splice(i, 1)[0]; S.groups.splice(i - 1, 0, x); renderGroups(); refreshPreview() }
+    if (b.classList.contains("gx")) {
+      var g = S.groups.splice(+b.dataset.i, 1)[0];
+      Object.keys(S.roles).forEach(function (r) { if (S.roles[r].group === g.name) S.roles[r].group = "__skip" });
+      if (S.scan) renderRoles(); renderGroups(); refreshPreview();
+    }
+    if (b.classList.contains("pl")) applyPresetFile(b.dataset.file);
+    if (b.classList.contains("pd")) {
+      if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Confirm"; return }
+      api("delete_preset", { file: b.dataset.file }).then(loadPresets).then(function () { status("Preset deleted.") });
+    }
+  });
+  $("addGroup").onclick = function () {
+    var n = 1, name; do { name = "GRP" + n++ } while (S.groups.some(function (g) { return g.name === name }));
+    S.groups.push({ name: name, min_tracks: 1 }); if (S.scan) renderRoles(); renderGroups(); refreshPreview();
+    var ins = document.querySelectorAll(".gn"), last = ins[ins.length - 1]; if (last) { last.focus(); last.select() }
+  };
+
+  // ---------- presets ----------
+  function loadPresets() {
+    return api("presets").then(function (r) {
+      S.presets = r.presets;
+      $("presetRows").innerHTML = r.presets.map(function (p) {
+        return "<tr><td><b>" + esc(p.name) + '</b></td><td class="mono" style="font-size:10px">' + esc((p.preset.groups || []).map(function (g) { return g.name + (g.min_tracks ? "×" + g.min_tracks : "") }).join("  ") || "default") +
+          '</td><td style="text-align:right"><button class="btn pl" type="button" data-file="' + esc(p.file) + '">Load</button> <button class="btn pd" type="button" data-file="' + esc(p.file) + '">Delete</button></td></tr>';
+      }).join("") || '<tr><td colspan="3" class="sub">No presets yet. Set up your tracks, name the preset below, and click Save.</td></tr>';
+    });
+  }
+  function applyPreset(p) {
+    S.groups = (p.groups || []).map(function (g) { return { name: g.name, min_tracks: g.min_tracks || 0 } });
+    Object.keys(p.roles || {}).forEach(function (k) {
+      var v = p.roles[k], key = Object.keys(S.roles).find(function (r) { return r.toLowerCase() === k.toLowerCase() }) || k;
+      S.roles[key] = { group: v.skip ? "__skip" : v.group, channels: v.channels ? v.channels.join(",") : "" };
+      if (!v.skip && v.group && !S.groups.some(function (g) { return g.name === v.group })) S.groups.push({ name: v.group, min_tracks: 0 });
+    });
+    Object.assign(S.options, p.options || {});
+    $("pName").value = p.name || "";
+    if (S.scan) { ensureGroups(); renderAll() } else { renderGroups(); renderOptions() }
+  }
+  function applyPresetFile(file) {
+    var p = S.presets.find(function (x) { return x.file === file });
+    if (p) { applyPreset(p.preset); status("Loaded preset “" + p.name + "”.", "ok") }
+  }
+  $("savePreset").onclick = function () {
+    if (!$("pName").value.trim()) { $("pName").focus(); status("Name the preset first.", "warn"); return }
+    api("save_preset", { preset: buildPreset() }).then(loadPresets).then(function () { status("Preset saved. It'll be here next time.", "ok") })
+      .catch(function (e) { status("Couldn't save the preset: " + e.message, "err") });
+  };
+  $("importPreset").onclick = function () {
+    api("import_preset").then(function (r) { if (r.preset) { applyPreset(r.preset); status("Preset imported. Click Save to keep it.", "ok") } })
+      .catch(function (e) { status("That file isn't a preset: " + e.message, "err") });
+  };
+
+  // ---------- export ----------
+  $("changeOut").onclick = function () {
+    api("choose", { kind: "output" }).then(function (r) { if (r.path) { S.out = r.path; $("outPath").textContent = r.path; $("outPath").title = r.path } });
+  };
+  var lastJob = null;
+  $("exportBtn").onclick = function () {
+    if (!S.scan) return;
+    $("exportBtn").disabled = true; $("revealBtn").hidden = true;
+    $("progressWin").hidden = false; $("pwBar").style.width = "3%"; $("pwText").textContent = "Reading timeline…"; $("pwSub").textContent = S.out;
+    api("export", { path: S.scan.path, project: S.project, preset: buildPreset(), out: S.out, media_roots: S.mediaRoots })
+      .then(poll).catch(function (e) { done(); status("Export failed: " + e.message, "err") });
+  };
+  function poll() {
+    api("job").then(function (j) {
+      lastJob = j;
+      if (j.state === "running") {
+        $("pwBar").style.width = (j.total ? Math.max(3, Math.round(100 * j.done / j.total)) : 3) + "%";
+        $("pwText").textContent = j.total ? "Writing audio: clip " + j.done + " of " + j.total : "Reading timeline…";
+        setTimeout(poll, 350);
+      } else if (j.state === "done") {
+        $("pwBar").style.width = "100%"; done();
+        var problems = /PROBLEMS \((\d+)\)/.exec(j.report);
+        $("report").textContent = j.report; selectTab("v-report"); $("revealBtn").hidden = false;
+        status(problems ? "AAF written with " + problems[1] + " problem(s). See the Report tab." : "AAF written in " + j.elapsed + " s: " + j.aaf, problems ? "warn" : "ok");
+      } else if (j.state === "failed") { done(); status("Export failed: " + j.error, "err") }
+      else setTimeout(poll, 350);
+    }).catch(function () { setTimeout(poll, 1000) });
+  }
+  function done() { $("exportBtn").disabled = false; setTimeout(function () { $("progressWin").hidden = true }, 500) }
+  $("revealBtn").onclick = function () { if (lastJob && lastJob.aaf) api("reveal", { path: lastJob.aaf }) };
+
+  renderGroups();
+})();
+</script>
+</body>
+</html>

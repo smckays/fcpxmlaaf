@@ -1,0 +1,52 @@
+{
+  "preset_version": 1,
+  "name": "Example mix template",
+  "groups": [
+    {
+      "name": "DX",
+      "min_tracks": 6
+    },
+    {
+      "name": "PFX",
+      "min_tracks": 2
+    },
+    {
+      "name": "MX",
+      "min_tracks": 2
+    },
+    {
+      "name": "FX",
+      "min_tracks": 4
+    }
+  ],
+  "roles": {
+    "Dialogue": {
+      "group": "DX"
+    },
+    "Dialogue.Recorder": {
+      "group": "DX",
+      "channels": [
+        1,
+        2
+      ]
+    },
+    "Music": {
+      "group": "MX"
+    },
+    "Effects": {
+      "group": "FX"
+    },
+    "Effects.Ambience": {
+      "group": "PFX"
+    }
+  },
+  "options": {
+    "handles_sec": 5,
+    "sample_rate": 48000,
+    "bit_depth": 24,
+    "edit_rate": "frame",
+    "unmapped": "by_main_role",
+    "levels": "clip_gain",
+    "fades": "aaf"
+  }
+}

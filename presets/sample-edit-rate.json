@@ -1,0 +1,7 @@
+{
+  "preset_version": 1,
+  "name": "Default mapping, sample-accurate timing",
+  "groups": [],
+  "roles": {},
+  "options": { "edit_rate": "sample" }
+}

@@ -109,6 +109,7 @@ class Asset:
     has_audio: bool
     channels: int
     rate: Optional[int]
+    has_video: bool = False   # audio from a camera file (vs. a separate sound recorder)
 
 
 @dataclass
@@ -208,6 +209,7 @@ class Parser:
                     has_audio=el.get("hasAudio") == "1",
                     channels=int(ch) if ch else (2 if el.get("hasAudio") == "1" else 0),
                     rate=int(rate.rstrip("k")) * 1000 if rate and rate.endswith("k") else (int(rate) if rate and rate.isdigit() else None),
+                    has_video=el.get("hasVideo") == "1",
                 )
 
     def warn(self, msg: str):

@@ -1,4 +1,4 @@
-FCPXML to AAF  (Mac app, test build v0.4.0)
+FCPXML to AAF  (Mac app, test build v0.5.0)
 =========================================
 
 Thanks for testing! This app turns a Final Cut Pro timeline export (FCPXML)
@@ -29,7 +29,7 @@ b) Open it. This is unsigned test software, so macOS blocks it the first time:
 
 2. TEST 1: THE BUILT-IN SAMPLE (about 5 minutes)
 -----------------------------------------------
-Click "Sample Project" in the toolbar, then "Export AAF". The AAF lands in
+Click "Try the sample project", then "Export AAF". The AAF lands in
 "FCPXML to AAF Sample Export" on your Desktop.
 
 Open it in Pro Tools (File > Open Session, or Import > Session Data).
@@ -50,16 +50,19 @@ You should see:
 3. TEST 2: A REAL EDIT
 ----------------------
 In Final Cut: select a short project, then File > Export XML...
-In the app: "Open FCPXML..." (or "Open .fcpxmld..."), set up the tracks in
-the Roles tab, click "Export AAF". By default the AAF goes into an "AAF Export"
+In the app: "Open..." and choose the FCPXML. On the left is your Final Cut
+audio, wired to AAF track groups on the right. Fix anything Preflight flags
+(right column), then click "Export AAF". By default the AAF goes into an "AAF Export"
 folder next to the FCPXML.
 
 Tips:
-  - The timeline at the bottom shows exactly what the AAF will contain:
-    green clips, pink level lines, fades and cross fades. Red clips mean
-    the media is offline. Click a clip to see its details.
+  - To re-route a role: click it, then click a track group (or use its
+    "-> DX" menu). "+ New group" makes a new one, e.g. PFX.
+  - Preflight checks every export first. Red items must be fixed (each has
+    a fix button); orange ones are worth a look; grey ones are notes.
+  - The strip at the bottom shows exactly what the AAF will contain.
   - Save your layout as a preset; it's there next time you open the app.
-  - If media has moved, click "Locate Media..." and choose the folder it's in.
+  - If media has moved, Preflight offers "Locate media..." to find it.
 
 
 WHAT TO SEND BACK
@@ -69,17 +72,17 @@ WHAT TO SEND BACK
   [ ] Sample: did fades, the crossfade and clip gain come through?
   [ ] Real edit: in sync with picture at 3-4 spots? Anything missing?
   [ ] Are the tracks and names what a mixer would want?
-  [ ] The report from each export (the Report tab in the app)
+  [ ] The report from each export ("View report" after exporting)
   [ ] If something broke: the log file at
       ~/Library/Logs/FCPXML to AAF.log
       (in Finder: Go > Go to Folder..., paste ~/Library/Logs)
 
 If the AAF won't open in Pro Tools, try again with Timing set to
 "Sample-accurate". If fades are missing, set Fades to "Drawn into clip gain".
-Both are in the Export Settings tab. That tells us what Pro Tools prefers.
+Both are under Settings. That tells us what Pro Tools prefers.
 
 
-KNOWN LIMITS (v0.4.0)
+KNOWN LIMITS (v0.5.0)
 ---------------------
 - Fade shapes (+3 dB, S-curve) arrive as plain linear fades.
 - Pan and audio effects (EQ, compression, etc.) are not carried over.

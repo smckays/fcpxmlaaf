@@ -12,7 +12,7 @@ Status: test build. Sample-accurate placement is verified against the source aud
 
 ## Mac app
 
-`app/` is a Mac app with a classic pro-editor interface: Browser, Viewer and a Timeline that previews the AAF. It bundles Python and ffmpeg, so there's nothing to install. Unsigned test builds need a one-time approval in System Settings ▸ Privacy & Security; see `app/macos/READ ME FIRST.txt`.
+`app/` is a Mac app: a patchbay that wires Final Cut audio to AAF track groups, a **Preflight** panel that checks every export and offers one-click fixes (camera scratch audio, offline media, muted clips, track templates…), and a preview of the AAF. Updates install from inside the app. It bundles Python and ffmpeg, so there's nothing to install. Unsigned test builds need a one-time approval in System Settings ▸ Privacy & Security; see `app/macos/READ ME FIRST.txt`.
 
 Build it (on any machine with Python 3, pip, curl and zip):
 
@@ -37,7 +37,9 @@ Needs ffmpeg for audio inside video files. WAV/AIFF works without it.
 |---|---|
 | `engine/fcpxml2aaf/` | Converter: FCPXML parser, role-to-track mapping, audio extraction, AAF writer, levels/fades |
 | `engine/aaf2/` | Vendored [pyaaf2](https://github.com/markreidvfx/pyaaf2) (MIT) |
-| `app/` | Mac app: local service (`server.py`), window (`main.py`), interface (`ui/index.html`), bundle files (`macos/`) |
+| `app/` | Mac app: local service (`server.py`), window (`main.py`), interface (`ui/index.html`; the earlier pro-editor look is `ui/classic.html`), bundle files (`macos/`) |
+| `engine/fcpxml2aaf/preflight.py` | Preflight checks: what's wrong, why, and the fix |
+| `design/mockups/` | Design directions explored for the interface |
 | `presets/` | Example presets |
 | `mapper/` | Standalone web page version of the role mapper |
 | `dev/` | Test-project generator, icon, build and download scripts |

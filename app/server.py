@@ -19,6 +19,7 @@ from fractions import Fraction
 
 from fcpxml2aaf import __version__
 from fcpxml2aaf.convert import convert
+from fcpxml2aaf import preflight as preflight_mod
 from fcpxml2aaf.mapping import build_tracks, load_preset
 from fcpxml2aaf.media import Relinker, find_tool
 from fcpxml2aaf.parser import Parser, resolve_input, tc_string
@@ -113,8 +114,9 @@ def scan_info(path: str, project: str = None, roots=()) -> dict:
     p, tl = TL.get(path, project)
     roles = {}
     for e in tl.events:
-        r = roles.setdefault(e.role, {"clips": 0, "max_channels": 0, "levels": 0, "fades": 0})
+        r = roles.setdefault(e.role, {"clips": 0, "max_channels": 0, "levels": 0, "fades": 0, "camera": 0})
         r["clips"] += 1
+        r["camera"] += 1 if e.asset.has_video else 0
         r["max_channels"] = max(r["max_channels"], len(e.channels))
         r["levels"] += 1 if e.gain_points else 0
         r["fades"] += 1 if (e.fade_in or e.fade_out) else 0
@@ -145,7 +147,7 @@ def default_out(path: str) -> str:
 
 def preview(path: str, preset: dict, project: str = None, roots=()) -> dict:
     """The exact track layout the AAF will get, with every clip's position, fades and gain for the timeline view."""
-    _p, tl = TL.get(path, project)
+    parser, tl = TL.get(path, project)
     pr = load_preset(None)
     pr.update({k: v for k, v in preset.items() if k != "options"})
     pr["options"].update(preset.get("options") or {})
@@ -179,7 +181,8 @@ def preview(path: str, preset: dict, project: str = None, roots=()) -> dict:
             items.append(it)
         out.append({"name": t.name, "group": t.group, "clips": len(t.items),
                     "roles": sorted({m.ev.role for m in t.items}), "items": items})
-    return {"tracks": out, "notes": notes, "duration": round(float(tl.duration), 4),
+    pf = preflight_mod.run(tl, parser, pr, tracks, notes, rl)
+    return {"tracks": out, "notes": notes, "preflight": pf, "duration": round(float(tl.duration), 4),
             "tc_start": round(float(tl.tc_start), 4), "fps": float(fps), "drop": tl.drop_frame,
             "offline_clips": sum(1 for t in out for i in t["items"] if i["offline"])}
 

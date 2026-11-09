@@ -99,6 +99,13 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
     relinker = Relinker(list(media_roots) + [here])
     work = tempfile.mkdtemp(prefix="fcpxml2aaf_")
     ex = Extractor(sr, int(opts["bit_depth"]), work)
+    from . import preflight as _pf
+    pf = _pf.run(tl, parser, preset, tracks, notes, relinker)
+    if pf["issues"]:
+        R("PREFLIGHT")
+        for i in pf["issues"]:
+            R("  [%s] %s: %s" % ({"error": "MUST FIX", "warn": "CHECK", "info": "NOTE"}[i["level"]], i["title"], i["detail"]))
+        R("")
     log("Audio engine: " + ex.describe())
     errors = []
     levels_mode = opts.get("levels", "clip_gain")

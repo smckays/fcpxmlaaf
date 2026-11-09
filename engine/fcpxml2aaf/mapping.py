@@ -45,6 +45,8 @@ DEFAULT_OPTIONS = {
     "unmapped": "by_main_role",
     "levels": "clip_gain",   # "clip_gain" | "off"
     "fades": "aaf",          # "aaf" (real fades) | "gain" (draw fades into clip gain) | "off"
+    "camera_audio": "include",  # "include" | "keep" (include, confirmed) | "auto" (drop where a recorder covers it) | "exclude"
+    "skip_muted": False,     # leave out clips muted in Final Cut (-96 dB)
 }
 
 
@@ -100,19 +102,73 @@ def is_crossfade(prev: MonoEvent, nxt: MonoEvent, prev_end: int, s: int, rate) -
         and abs(overlap - int(round(prev.ev.fade_out * rate))) <= 1
 
 
+def route(ev: AudioEvent, preset: dict):
+    """(group, channels) an event is sent to, or None when it isn't exported."""
+    rule = _role_rule(preset, ev.role)
+    if rule and rule.get("skip"):
+        return None
+    group = (rule or {}).get("group") or _default_group(ev.role, preset["options"]["unmapped"])
+    if not group:
+        return None
+    chans = (rule or {}).get("channels")
+    use = [c for c in ev.channels if (not chans or chans == "all" or c in chans)]
+    return (group, use) if use else None
+
+
+def is_muted(ev: AudioEvent) -> bool:
+    return bool(ev.gain_points) and all(v <= -90 for _, v in ev.gain_points)
+
+
+def _union(intervals):
+    out = []
+    for a, b in sorted(intervals):
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return out
+
+
+def covered_fraction(ev: AudioEvent, spans) -> float:
+    """How much of ev's time is also covered by the (merged) spans."""
+    a, b = ev.tl_in, ev.tl_in + ev.dur
+    tot = sum(max(0, min(b, y) - max(a, x)) for x, y in spans)
+    return float(tot / ev.dur) if ev.dur else 0.0
+
+
+def camera_overlaps(routed):
+    """Camera-audio events that play at the same time as separately recorded (audio-only) sound."""
+    def main(e):
+        return e.role.split(".")[0].lower()
+    rec = {}
+    for e, _ in routed:
+        if not e.asset.has_video:
+            rec.setdefault(main(e), []).append([e.tl_in, e.tl_in + e.dur])
+    rec = {k: _union(v) for k, v in rec.items()}
+    # only sound of the same kind counts: camera dialogue vs recorded dialogue, not vs the music
+    return [e for e, _ in routed if e.asset.has_video and covered_fraction(e, rec.get(main(e), [])) >= 0.5]
+
+
+def routed_events(events: List[AudioEvent], preset: dict):
+    """Events that will be exported, after routing and the filter options. [(event, (group, channels))]"""
+    opts = preset["options"]
+    routed = [(ev, r) for ev in events for r in [route(ev, preset)] if r]
+    if opts.get("skip_muted"):
+        routed = [(e, r) for e, r in routed if not is_muted(e)]
+    cam = opts.get("camera_audio", "include")
+    if cam == "exclude":
+        routed = [(e, r) for e, r in routed if not e.asset.has_video]
+    elif cam == "auto":
+        drop = {id(e) for e in camera_overlaps(routed)}
+        routed = [(e, r) for e, r in routed if id(e) not in drop]
+    return routed
+
+
 def build_tracks(events: List[AudioEvent], preset: dict, rate) -> (List[Track], List[str]):
     """rate: edit units per second (Fraction) used to decide overlaps."""
     notes: List[str] = []
     monos: List[MonoEvent] = []
-    for ev in events:
-        rule = _role_rule(preset, ev.role)
-        if rule and rule.get("skip"):
-            continue
-        group = (rule or {}).get("group") or _default_group(ev.role, preset["options"]["unmapped"])
-        if not group:
-            continue
-        chans = (rule or {}).get("channels")
-        use = [c for c in ev.channels if (not chans or chans == "all" or c in chans)]
+    for ev, (group, use) in routed_events(events, preset):
         for c in use:
             monos.append(MonoEvent(ev=ev, channel=c, group=group))
 

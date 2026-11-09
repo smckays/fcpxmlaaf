@@ -324,7 +324,19 @@ class Parser:
     def _walk(self, el, pdelta, w0, w1, out, path, inactive_roles, mix=None, ext=None):
         mix = mix or Mix()
         tag = el.tag
-        if tag == "transition" or el.get("enabled") == "0":
+        if tag == "transition":
+            return
+        if el.get("enabled") == "0":
+            # A disabled clip is silent, but clips connected to it still play in Final Cut.
+            offset, start = t(el.get("offset")), t(el.get("start"))
+            if tag == "spine" and el.get("start") is None:
+                kids = [k for k in el if k.tag in STORY]
+                start = t(kids[0].get("offset")) if kids else Fraction(0)
+            if tag in ("asset-clip", "audio", "ref-clip", "mc-clip", "sync-clip", "clip", "gap", "title", "video"):
+                d = pdelta + offset - start
+                for k in el:
+                    if k.tag in STORY and k.get("lane") is not None:
+                        self._walk(k, d, w0, w1, out, "%s > %s (disabled)" % (path, el.get("name", tag)), inactive_roles, mix)
             return
 
         offset = t(el.get("offset"))

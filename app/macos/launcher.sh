@@ -23,10 +23,14 @@ if [ "$(uname -m)" = "arm64" ] || [ "$(sysctl -in hw.optional.arm64 2>/dev/null)
 else
   PY="$R/python-x86_64/bin/python3"; export FCPXML2AAF_FFMPEG="$R/ffmpeg/ffmpeg-x86_64"
 fi
+# An Apple Silicon Mac can run the Intel version through Rosetta.
+if [ ! -x "$PY" ] && [ -x "$R/python-x86_64/bin/python3" ]; then
+  PY="$R/python-x86_64/bin/python3"; export FCPXML2AAF_FFMPEG="$R/ffmpeg/ffmpeg-x86_64"
+fi
 [ -x "$FCPXML2AAF_FFMPEG" ] || unset FCPXML2AAF_FFMPEG
 
 if [ ! -x "$PY" ]; then
-  osascript -e 'display alert "FCPXML to AAF is damaged" message "Its built-in Python is missing. Please download the app again." as critical'
+  osascript -e 'display alert "This copy is for a different kind of Mac" message "This download of FCPXML to AAF doesn'"'"'t include the version for this Mac'"'"'s processor. Download the other version (Apple Silicon or Intel) and try again. To check which you have: Apple menu > About This Mac." as critical'
   exit 1
 fi
 exec "$PY" -I "$R/app/main.py"

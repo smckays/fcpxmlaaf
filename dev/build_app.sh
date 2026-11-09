@@ -1,11 +1,11 @@
 #!/bin/bash
 # Assemble "FCPXML to AAF.app" (universal: Apple Silicon + Intel) and zip it.
-# Usage: dev/build_app.sh PARTS_DIR OUT_DIR SAMPLE_DIR
+# Usage: dev/build_app.sh PARTS_DIR OUT_DIR SAMPLE_DIR [universal|apple-silicon|intel]
 #   PARTS_DIR holds py-aarch64.tar.gz, py-x86_64.tar.gz, ff/*.whl (imageio-ffmpeg), wv/ (pywebview + PyObjC for macOS)
 #   SAMPLE_DIR is the friendly sample project folder ("FCPXML2AAF Sample")
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PARTS="$1"; OUT="$2"; SAMPLE="$3"
+PARTS="$1"; OUT="$2"; SAMPLE="$3"; FLAVOR="${4:-universal}"
 VER=$(sed -n 's/__version__ = "\(.*\)"/\1/p' "$ROOT/engine/fcpxml2aaf/__init__.py")
 APP="$OUT/FCPXML to AAF.app"
 C="$APP/Contents"; R="$C/Resources"
@@ -55,7 +55,12 @@ FCPXML to AAF bundles these open-source components:
 EOT
 
 find "$APP" -name __pycache__ -prune -exec rm -rf {} +
+case "$FLAVOR" in
+  apple-silicon) rm -rf "$R/python-x86_64" "$R/ffmpeg/ffmpeg-x86_64"; SUFFIX="mac-apple-silicon" ;;
+  intel)         rm -rf "$R/python-arm64" "$R/ffmpeg/ffmpeg-arm64"; SUFFIX="mac-intel" ;;
+  *)             SUFFIX="mac" ;;
+esac
 cp "$ROOT/app/macos/READ ME FIRST.txt" "$OUT/READ ME FIRST.txt"
-ZIP="$OUT/FCPXML-to-AAF-v$VER-mac.zip"
+ZIP="$OUT/FCPXML-to-AAF-v$VER-$SUFFIX.zip"
 rm -f "$ZIP"; (cd "$OUT" && zip -qryX "$(basename "$ZIP")" "FCPXML to AAF.app" "READ ME FIRST.txt")
 du -sh "$APP" "$ZIP"

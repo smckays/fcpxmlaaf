@@ -1,0 +1,18 @@
+{
+  "version": "0.4.0",
+  "notes": "New: Check for Updates (this window), and an Appearance window for interface size, theme, accent color and clip color. The app remembers its window size.\nFixes from 0.3.2 included: muted camera audio in compound clips stays out; 32-bit float recorder files are read.",
+  "files": {
+    "apple-silicon": {
+      "name": "FCPXML-to-AAF-v0.4.0-mac-apple-silicon.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.4.0-mac-apple-silicon.zip",
+      "size": 33896779,
+      "sha256": "8592228d8c1f84dab2f129cb3be6c1dc96129507ee1a74218c4fd8cd11aae348"
+    },
+    "intel": {
+      "name": "FCPXML-to-AAF-v0.4.0-mac-intel.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.4.0-mac-intel.zip",
+      "size": 35714125,
+      "sha256": "4ae68f80f4d9fa730683f372477e9433a868d6252fa7ebd233cf73eca343be21"
+    }
+  }
+}

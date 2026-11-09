@@ -38,7 +38,10 @@ def native_window(url) -> bool:
         return False
     brand_process()
     try:
-        webview.create_window(TITLE, url, width=1240, height=860, min_size=(960, 640), background_color="#121614")
+        ui = (server.load_state().get("ui") or {})
+        w, h = ui.get("window") or (1240, 860)
+        w, h = max(960, min(int(w), 4000)), max(640, min(int(h), 3000))
+        webview.create_window(TITLE, url, width=w, height=h, min_size=(960, 640), background_color="#2a2a2a")
         webview.start()
         return True
     except Exception as e:

@@ -2,9 +2,13 @@
 Listens on 127.0.0.1 only, and every API call must carry the per-launch token."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import platform
 import secrets
+import shutil
+import tempfile
 import subprocess
 import sys
 import threading
@@ -222,6 +226,136 @@ def run_export(path, preset, out_dir, project, media_roots):
         job.state = "failed"
 
 
+# ---------------- updates ----------------
+UPDATE_URL = os.environ.get("FCPXML2AAF_UPDATE_URL",
+                            "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/latest.json")
+CACHE = os.path.expanduser("~/Library/Caches/FCPXML to AAF")
+
+
+def app_bundle():
+    """The .app folder this copy runs from, or None when running from source."""
+    b = os.path.dirname(os.path.dirname(RESOURCES))
+    return b if b.endswith(".app") else None
+
+
+def mac_flavor() -> str:
+    """Which download fits this Mac. Apple Silicon is detected even when running under Rosetta."""
+    try:
+        r = subprocess.run(["sysctl", "-in", "hw.optional.arm64"], capture_output=True, text=True)
+        if r.stdout.strip() == "1":
+            return "apple-silicon"
+    except Exception:
+        pass
+    return "apple-silicon" if platform.machine() == "arm64" else "intel"
+
+
+def vtuple(v: str):
+    return tuple(int(x) if x.isdigit() else 0 for x in str(v).split("."))
+
+
+def fetch(url: str, dest: str = None, timeout: int = 30) -> bytes:
+    """Use the Mac's own curl (it trusts the system's certificates); fall back to urllib."""
+    curl = shutil.which("curl") or "/usr/bin/curl"
+    if os.path.exists(curl):
+        cmd = [curl, "-fsSL", "--max-time", str(timeout), url]
+        if dest:
+            cmd[1:1] = ["-o", dest]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0:
+            raise RuntimeError("Couldn't reach GitHub (%s)" % (r.stderr.decode(errors="ignore").strip()[-160:] or r.returncode))
+        return b"" if dest else r.stdout
+    import urllib.request
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        data = resp.read()
+    if dest:
+        with open(dest, "wb") as fh:
+            fh.write(data)
+        return b""
+    return data
+
+
+def check_update() -> dict:
+    info = json.loads(fetch(UPDATE_URL).decode())
+    flavor = mac_flavor()
+    f = (info.get("files") or {}).get(flavor)
+    bundle = app_bundle()
+    can = bool(bundle) and "/AppTranslocation/" not in bundle and os.access(os.path.dirname(bundle), os.W_OK)
+    return {"current": __version__, "latest": info.get("version"), "notes": info.get("notes", ""),
+            "newer": bool(f) and vtuple(info.get("version")) > vtuple(__version__),
+            "size": (f or {}).get("size"), "flavor": flavor, "can_install": can,
+            "why_not": None if can else ("This copy isn't running from a .app bundle." if not bundle else
+                                         "Move the app into your Applications folder first, then update.")}
+
+
+class Update:
+    state = "idle"   # idle | downloading | installing | restarting | failed
+    done = total = 0
+    error = None
+
+
+def run_update():
+    U = Update
+    try:
+        U.state, U.error, U.done = "downloading", None, 0
+        info = json.loads(fetch(UPDATE_URL).decode())
+        f = info["files"][mac_flavor()]
+        U.total = int(f.get("size") or 0)
+        os.makedirs(CACHE, exist_ok=True)
+        work = tempfile.mkdtemp(prefix="update-", dir=CACHE)
+        zpath = os.path.join(work, f["name"])
+        th = threading.Thread(target=fetch, args=(f["url"], zpath, 1800))
+        th.start()
+        while th.is_alive():
+            U.done = os.path.getsize(zpath) if os.path.exists(zpath) else 0
+            time.sleep(0.3)
+        if not os.path.exists(zpath) or (U.total and os.path.getsize(zpath) != U.total):
+            raise RuntimeError("The download didn't finish. Check your internet connection and try again.")
+        U.done = U.total
+        U.state = "installing"
+        h = hashlib.sha256()
+        with open(zpath, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        if f.get("sha256") and h.hexdigest() != f["sha256"]:
+            raise RuntimeError("The download was damaged (checksum mismatch). Try again.")
+        out = os.path.join(work, "unzipped")
+        os.makedirs(out)
+        ditto = shutil.which("ditto") or ("/usr/bin/ditto" if os.path.exists("/usr/bin/ditto") else None)
+        r = subprocess.run([ditto, "-x", "-k", zpath, out] if ditto else ["unzip", "-q", zpath, "-d", out], capture_output=True)
+        new_app = os.path.join(out, "FCPXML to AAF.app")
+        if r.returncode != 0 or not os.path.isdir(new_app):
+            raise RuntimeError("Couldn't unpack the update.")
+        old_app = app_bundle()
+        helper = os.path.join(work, "install.sh")
+        with open(helper, "w") as fh:
+            fh.write(INSTALL_SCRIPT)
+        os.chmod(helper, 0o755)
+        U.state = "restarting"
+        subprocess.Popen(["/bin/bash", helper, str(os.getpid()), new_app, old_app, work],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        time.sleep(1.2)  # let the window show "Restarting…"
+        os._exit(0)
+    except Exception as e:
+        U.state, U.error = "failed", str(e) or e.__class__.__name__
+
+
+# Runs after the app quits: swap the app bundle, keep the old one if anything fails, relaunch.
+INSTALL_SCRIPT = r"""#!/bin/bash
+PID="$1"; NEW="$2"; OLD="$3"; WORK="$4"
+for i in $(seq 1 120); do kill -0 "$PID" 2>/dev/null || break; sleep 0.5; done
+BACKUP="$OLD.previous"
+rm -rf "$BACKUP"
+if mv "$OLD" "$BACKUP" && mv "$NEW" "$OLD"; then
+  rm -rf "$BACKUP"
+else
+  [ -d "$OLD" ] || mv "$BACKUP" "$OLD"
+fi
+xattr -dr com.apple.quarantine "$OLD" 2>/dev/null
+rm -rf "$WORK"
+command -v open >/dev/null && open "$OLD"
+"""
+
+
 # ---------------- HTTP ----------------
 class App:
     token = secrets.token_urlsafe(16)
@@ -269,9 +403,36 @@ class Handler(BaseHTTPRequestHandler):
     # ----- api -----
     def api_hello(self, b):
         ensure_presets()
-        return {"version": __version__, "ffmpeg": bool(find_tool("ffmpeg")), "recent":
+        st = load_state()
+        return {"version": __version__, "ffmpeg": bool(find_tool("ffmpeg")), "ui": st.get("ui") or {},
+                "check_updates": time.time() - st.get("last_update_check", 0) > 6 * 3600, "recent":
                 [p for p in load_state().get("recent", []) if os.path.exists(p)],
                 "sample": SAMPLE if os.path.exists(SAMPLE) else None}
+
+    def api_ui_state(self, b):
+        """Get (no body) or save ({"ui": {...}}) appearance and window settings."""
+        st = load_state()
+        if "ui" in b:
+            st["ui"] = dict(st.get("ui") or {}, **b["ui"])
+            save_state(st)
+        return {"ui": st.get("ui") or {}}
+
+    def api_check_update(self, b):
+        st = load_state()
+        st["last_update_check"] = time.time()
+        save_state(st)
+        return check_update()
+
+    def api_install_update(self, b):
+        if JOB.state == "running":
+            return {"error": "Wait for the export to finish first."}
+        if Update.state in ("downloading", "installing", "restarting"):
+            return {"ok": True}
+        threading.Thread(target=run_update, daemon=True).start()
+        return {"ok": True}
+
+    def api_update_status(self, b):
+        return {"state": Update.state, "done": Update.done, "total": Update.total, "error": Update.error}
 
     def api_beat(self, b):
         App.last_beat = time.time()

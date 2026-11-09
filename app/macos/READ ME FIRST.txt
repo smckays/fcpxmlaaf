@@ -1,4 +1,4 @@
-FCPXML to AAF  (Mac app, test build v0.3.2)
+FCPXML to AAF  (Mac app, test build v0.4.0)
 =========================================
 
 Thanks for testing! This app turns a Final Cut Pro timeline export (FCPXML)
@@ -79,7 +79,7 @@ If the AAF won't open in Pro Tools, try again with Timing set to
 Both are in the Export Settings tab. That tells us what Pro Tools prefers.
 
 
-KNOWN LIMITS (v0.3.2)
+KNOWN LIMITS (v0.4.0)
 ---------------------
 - Fade shapes (+3 dB, S-curve) arrive as plain linear fades.
 - Pan and audio effects (EQ, compression, etc.) are not carried over.

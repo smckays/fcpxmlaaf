@@ -6,6 +6,7 @@ import os
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import wave
 from typing import Dict, List, Optional, Tuple
@@ -103,8 +104,9 @@ class PCMWav:
         if not self.fmt or self.data_offset is None:
             raise MediaError("WAV missing fmt/data")
         tag, self.channels, self.rate, self.align, self.bits = self.fmt
-        if tag != 1:
-            raise MediaError("WAV is not integer PCM (format %d)" % tag)
+        if tag not in (1, 3) or (tag == 3 and self.bits not in (32, 64)):
+            raise MediaError("unsupported WAV format (format %d, %d-bit)" % (tag, self.bits))
+        self.is_float = tag == 3  # 32-bit float recorders (Zoom, Sound Devices…)
         self.width = self.bits // 8
         self.frames = self.data_size // self.align
 
@@ -119,6 +121,17 @@ class PCMWav:
         out = bytearray(n_frames * w)
         for b in range(w):
             out[b::w] = data[o + b::self.align][:n_frames]
+        if self.is_float:  # convert float samples to 24-bit integers, clipping at full scale
+            import array
+            fa = array.array("f" if w == 4 else "d")
+            fa.frombytes(bytes(out))
+            if sys.byteorder != "little":
+                fa.byteswap()
+            pcm = bytearray(len(fa) * 3)
+            for i, v in enumerate(fa):
+                x = int(round((1.0 if v > 1.0 else -1.0 if v < -1.0 else v) * 8388607.0))
+                pcm[3 * i:3 * i + 3] = (x & 0xFFFFFF).to_bytes(3, "little")
+            out, w = pcm, 3
         with wave.open(out_path, "wb") as ww:
             ww.setnchannels(1)
             ww.setsampwidth(w)
@@ -144,6 +157,18 @@ class Extractor:
         if self.afconvert:
             return "built-in Python + afconvert (no ffmpeg: video files like .mov/.mp4 may fail)"
         return "built-in Python (no ffmpeg: only WAV sources will work)"
+
+    def describe_file(self, path: str) -> str:
+        """One line about a source file's audio, for the report."""
+        try:
+            if self.ffmpeg:
+                out = subprocess.run([self.ffmpeg, "-hide_banner", "-i", path], capture_output=True, text=True)
+                streams = [l.split("Audio:", 1)[1].strip() for l in out.stderr.splitlines() if "Stream #" in l and "Audio:" in l]
+                return " | ".join(streams) or "no audio streams"
+            w = PCMWav(path)
+            return "WAV %d ch, %d Hz, %d-bit%s" % (w.channels, w.rate, w.bits, " float" if w.is_float else "")
+        except Exception as e:
+            return "unreadable (%s)" % e
 
     # -------- ffmpeg path --------
     def _stream_channels(self, path: str) -> List[int]:

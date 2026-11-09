@@ -382,6 +382,14 @@ class Parser:
             fades.append(("out", pdelta + ext[3][0] + ext[3][1], ext[3][1], "crossfade"))
         own = mix.add(env, fades)
 
+        # Roles switched off on this clip (e.g. camera audio muted after syncing). Final Cut stores
+        # these on sync clips (sync-source), compound clips (ref-clip) and multicam clips (mc-source).
+        if tag in ("sync-clip", "ref-clip", "mc-clip"):
+            off = {pretty_role(x.get("role", "")).lower() for x in el.iter("audio-role-source")
+                   if x.get("active") == "0" or x.get("enabled") == "0"}
+            if off:
+                inactive_roles = set(inactive_roles) | off
+
         if tag == "asset-clip":
             self._emit_asset_clip(el, delta, aw0, aw1, out, here, inactive_roles, own)
         elif tag == "audio":
@@ -398,13 +406,6 @@ class Parser:
         elif tag == "mc-clip":
             self._walk_multicam(el, delta, aw0, aw1, out, here, inactive_roles, own,
                                 ext, start, start + dur if dur is not None else None)
-
-        if tag == "sync-clip":
-            roles = set(inactive_roles)
-            for ss in el.iter("audio-role-source"):
-                if ss.get("active") == "0":
-                    roles.add(pretty_role(ss.get("role", "")).lower())
-            inactive_roles = roles
 
         # Children. Connected clips (with a lane) may hang past their parent and still play,
         # so they keep the parent's window. A clip's *own* contents are trimmed to the clip.

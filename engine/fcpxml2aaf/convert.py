@@ -230,6 +230,18 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
+    R("Audio engine: " + ex.describe())
+    R("")
+    R("SOURCE AUDIO (file: channels used -> format)")
+    used = {}
+    for tr in tracks:
+        for m in tr.items:
+            used.setdefault(m.ev.asset.path, set()).add(m.channel)
+    for pth in sorted(used):
+        found = relinker.find(pth)
+        R("  %s: ch %s -> %s" % (os.path.basename(pth), ",".join(map(str, sorted(used[pth]))),
+                                 ex.describe_file(found) if found else "MISSING"))
+    R("")
     R("AAF written: %s  (%.1f MB)" % (aaf_path, os.path.getsize(aaf_path) / 1e6))
     R("Levels: " + ("%d clips carry clip gain." % stats["gain_clips"] if levels_mode != "off"
                     else "left out (preset setting)."))

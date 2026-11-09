@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8"><title>A · Paper</title>
+<style>
+/* Direction A: white paper, black ink, one signal-orange accent. Sidebar of roles, timeline as the hero. */
+:root { --bg:#fff; --ink:#000; --mute:#6b6b6b; --rule:#000; --hair:#e6e6e6; --accent:#ff4f00; --dx:#000; --mx:#000; --fx:#000;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif; --mono:"SF Mono",Menlo,monospace }
+*{box-sizing:border-box} html,body{margin:0;height:100%} body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--ui);-webkit-font-smoothing:antialiased}
+.app{height:100vh;display:grid;grid-template-rows:56px 1fr;}
+header{display:flex;align-items:center;gap:24px;padding:0 24px;border-bottom:2px solid var(--rule)}
+header h1{font-size:15px;font-weight:700;letter-spacing:-.01em;margin:0}
+header .file{font-size:13px;color:var(--mute)} header .file b{color:var(--ink);font-weight:600}
+header .sp{flex:1}
+.btn{font:600 13px var(--ui);border:2px solid var(--ink);background:none;color:var(--ink);padding:7px 14px;border-radius:0}
+.btn.go{background:var(--ink);color:#fff}
+.btn.go::after{content:"";display:inline-block;width:8px;height:8px;background:var(--accent);margin-left:10px;vertical-align:1px}
+main{display:grid;grid-template-columns:300px 1fr;min-height:0}
+aside{border-right:2px solid var(--rule);padding:22px 24px;display:grid;align-content:start;gap:26px;overflow:auto}
+.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+.facts .v{font:500 20px var(--mono);letter-spacing:-.02em}
+.facts .k{font-size:11px;color:var(--mute)}
+.roles{display:grid;gap:0;border-top:1px solid var(--ink)}
+.role{display:grid;grid-template-columns:1fr auto;align-items:center;padding:11px 0;border-bottom:1px solid var(--hair)}
+.role .n{font-weight:600} .role .s{color:var(--mute);font-size:12px}
+.pill{font:600 12px var(--mono);border:1.5px solid var(--ink);padding:3px 9px;min-width:48px;text-align:center}
+.pill.off{border-style:dashed;color:var(--mute);border-color:var(--mute)}
+.tl{display:grid;grid-template-rows:auto 28px 1fr;min-height:0;padding:22px 28px 22px 24px;gap:10px}
+.tlhead{display:flex;align-items:baseline;gap:16px}
+.tlhead h2{font-size:28px;font-weight:700;letter-spacing:-.03em;margin:0}
+.tlhead .mute{color:var(--mute)}
+.ruler{position:relative;border-bottom:2px solid var(--ink);margin-left:64px}
+.ruler span{position:absolute;bottom:4px;font:11px var(--mono);color:var(--mute)}
+.ruler i{position:absolute;bottom:-2px;width:2px;height:8px;background:var(--ink)}
+.tracks{display:grid;align-content:start;gap:6px;overflow:auto}
+.trk{display:grid;grid-template-columns:64px 1fr;align-items:center;height:34px}
+.trk b{font:700 12px var(--mono)}
+.lane{position:relative;height:100%;border-bottom:1px solid var(--hair)}
+.clip{position:absolute;top:3px;bottom:3px;background:var(--ink);color:#fff;font:600 11px var(--ui);padding:7px 8px;white-space:nowrap;overflow:hidden}
+.clip.lt{background:#fff;color:var(--ink);border:1.5px solid var(--ink)}
+.xf{position:absolute;top:3px;bottom:3px;background:repeating-linear-gradient(135deg,var(--accent) 0 3px,#fff 3px 6px);border:1.5px solid var(--ink)}
+.gain{position:absolute;left:6px;right:6px;bottom:5px;height:2px;background:var(--accent)}
+.foot{display:flex;gap:24px;font-size:12px;color:var(--mute);padding-top:6px;border-top:1px solid var(--hair)}
+.foot b{color:var(--ink)}
+</style></head><body><div class="app">
+<header><h1>FCPXML → AAF</h1><span class="file"><b>Test Cut v1</b> · Sample</span><span class="sp"></span>
+<button class="btn">Open…</button><button class="btn">Presets</button><button class="btn go">Export AAF</button></header>
+<main>
+<aside>
+  <div class="facts">
+    <div><div class="v">01:00:00:00</div><div class="k">Start</div></div><div><div class="v">00:00:50:00</div><div class="k">Duration</div></div>
+    <div><div class="v">23.976</div><div class="k">Frame rate</div></div><div><div class="v">8</div><div class="k">Tracks out</div></div>
+  </div>
+  <div><div class="lbl" style="margin-bottom:10px">Roles → Tracks</div>
+  <div class="roles">
+    <div class="role"><div><div class="n">Dialogue</div><div class="s">Boom · 2 ch</div></div><span class="pill">DX</span></div>
+    <div class="role"><div><div class="n">Dialogue</div><div class="s">Lav · 1 ch</div></div><span class="pill">DX</span></div>
+    <div class="role"><div><div class="n">Dialogue</div><div class="s">Recorder · 4 ch</div></div><span class="pill">DX</span></div>
+    <div class="role"><div><div class="n">Music</div><div class="s">Score · 2 ch</div></div><span class="pill">MX</span></div>
+    <div class="role"><div><div class="n">Effects</div><div class="s">Ambience · 1 ch</div></div><span class="pill">FX</span></div>
+    <div class="role"><div><div class="n">Effects</div><div class="s">Temp VO · 1 ch</div></div><span class="pill off">OFF</span></div>
+  </div></div>
+</aside>
+<section class="tl">
+  <div class="tlhead"><h2>AAF preview</h2><span class="mute">What Pro Tools will receive</span></div>
+  <div class="ruler" id="r"></div>
+  <div class="tracks" id="t"></div>
+  <div class="foot"><span><b>13</b> clips</span><span><b>8</b> carry clip gain</span><span><b>6</b> fades · <b>2</b> crossfades</span><span><b>0</b> offline</span></div>
+</section></main></div>
+<script src="data.js"></script><script>render({ruler:'r',tracks:'t',light:['MX','FX'],labelW:64})</script>
+</body></html>

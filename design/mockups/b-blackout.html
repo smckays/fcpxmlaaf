@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><title>B · Blackout</title>
+<style>
+/* Direction B: pure black, white type, one electric-yellow accent. Timeline full width; roles as big toggles; export rail on the right. */
+:root{--bg:#000;--ink:#fff;--mute:#8a8a8a;--line:#2a2a2a;--accent:#ffe600;--ui:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif;--mono:"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%}body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--ui);-webkit-font-smoothing:antialiased}
+.app{height:100vh;display:grid;grid-template-columns:1fr 290px;grid-template-rows:64px auto 1fr}
+header{grid-column:1/3;display:flex;align-items:center;gap:20px;padding:0 28px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.03em}
+header h1 em{font-style:normal;color:var(--accent)}
+.crumb{color:var(--mute);font-size:13px}.crumb b{color:var(--ink)}
+.sp{flex:1}
+.ghost{font:600 13px var(--ui);color:var(--ink);background:none;border:1px solid #4a4a4a;border-radius:999px;padding:7px 16px}
+.roles{grid-column:1;display:flex;flex-wrap:wrap;gap:10px;padding:22px 28px 6px}
+.chip{display:flex;align-items:center;gap:12px;border:1px solid #3a3a3a;border-radius:12px;padding:10px 14px;min-width:170px}
+.chip .t{font-weight:700;font-size:14px}.chip .s{color:var(--mute);font-size:12px}
+.chip .to{margin-left:auto;font:700 13px var(--mono);color:#000;background:var(--ink);border-radius:6px;padding:4px 8px}
+.chip.off{opacity:.38}.chip.off .to{background:none;color:var(--ink);border:1px solid var(--ink)}
+.tl{grid-column:1;padding:16px 28px 28px;display:grid;grid-template-rows:26px 1fr;min-height:0}
+.ruler{position:relative;margin-left:58px;border-bottom:1px solid #4a4a4a}
+.ruler span{position:absolute;bottom:5px;font:11px var(--mono);color:var(--mute)}
+.ruler i{position:absolute;bottom:0;width:1px;height:6px;background:#4a4a4a}
+.tracks{display:grid;align-content:start;gap:8px;padding-top:10px;overflow:auto}
+.trk{display:grid;grid-template-columns:58px 1fr;align-items:center;height:30px}
+.trk b{font:600 12px var(--mono);color:var(--mute)}
+.lane{position:relative;height:100%}
+.lane::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:#1c1c1c}
+.clip{position:absolute;top:0;bottom:0;background:var(--ink);color:#000;font:700 11px var(--ui);padding:8px 9px;border-radius:5px;white-space:nowrap;overflow:hidden}
+.clip.lt{background:none;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.gain{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--accent)}
+.xf{position:absolute;top:-3px;bottom:-3px;background:var(--accent);border-radius:3px;z-index:2;opacity:.95}
+.rail{grid-column:2;grid-row:2/4;border-left:1px solid var(--line);padding:26px 24px;display:grid;align-content:start;gap:22px}
+.big{font:800 64px/1 var(--ui);letter-spacing:-.05em}.big small{font-size:16px;font-weight:600;letter-spacing:0;color:var(--mute);margin-left:6px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:10px 8px;font-size:13px}.kv span:nth-child(odd){color:var(--mute)}.kv span:nth-child(even){font-family:var(--mono)}
+.export{font:800 17px var(--ui);background:var(--accent);color:#000;border:0;border-radius:14px;padding:18px;width:100%;letter-spacing:-.01em}
+.small{font-size:12px;color:var(--mute)}
+</style></head><body><div class="app">
+<header><h1>FCPXML<em>→</em>AAF</h1><span class="crumb"><b>Test Cut v1</b> &nbsp;·&nbsp; 23.976 &nbsp;·&nbsp; 01:00:00:00</span><span class="sp"></span><button class="ghost">Open</button><button class="ghost">Preset: Show Mix</button><button class="ghost">Settings</button></header>
+<div class="roles">
+  <div class="chip"><div><div class="t">Boom</div><div class="s">Dialogue · 2 ch</div></div><span class="to">DX</span></div>
+  <div class="chip"><div><div class="t">Lav</div><div class="s">Dialogue · 1 ch</div></div><span class="to">DX</span></div>
+  <div class="chip"><div><div class="t">Recorder</div><div class="s">Dialogue · 4 ch</div></div><span class="to">DX</span></div>
+  <div class="chip"><div><div class="t">Score</div><div class="s">Music · 2 ch</div></div><span class="to">MX</span></div>
+  <div class="chip"><div><div class="t">Ambience</div><div class="s">Effects · 1 ch</div></div><span class="to">FX</span></div>
+  <div class="chip off"><div><div class="t">Temp VO</div><div class="s">Effects · 1 ch</div></div><span class="to">OFF</span></div>
+</div>
+<section class="tl"><div class="ruler" id="r"></div><div class="tracks" id="t"></div></section>
+<aside class="rail">
+  <div><div class="big">8<small>tracks</small></div></div>
+  <div class="kv"><span>Clips</span><span>13</span><span>Clip gain</span><span>8</span><span>Fades</span><span>6</span><span>Crossfades</span><span>2</span><span>Offline media</span><span>0</span><span>Format</span><span>48k / 24-bit</span><span>Handles</span><span>5 s</span></div>
+  <button class="export">Export AAF</button>
+  <div class="small">Saves to Desktop ▸ AAF Export</div>
+</aside>
+</div>
+<script src="data.js"></script><script>render({ruler:'r',tracks:'t',light:['MX','FX'],short:true})</script>
+</body></html>

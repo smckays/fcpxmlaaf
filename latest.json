@@ -1,18 +1,18 @@
 {
-  "version": "0.4.0",
-  "notes": "New: Check for Updates (this window), and an Appearance window for interface size, theme, accent color and clip color. The app remembers its window size.\nFixes from 0.3.2 included: muted camera audio in compound clips stays out; 32-bit float recorder files are read.",
+  "version": "0.5.0",
+  "notes": "New look: your Final Cut audio is wired to Pro Tools track groups like a patchbay. Click a role, then a group, to re-route it.\nNew Preflight panel checks every export before it's written and explains what's wrong with a one-click fix. It catches camera scratch audio going out alongside your sound recorder (the cause of distorted, duplicate dialogue tracks), offline media, muted clips and more.\nThemes: Blackout (dark) or Paper (light), under Appearance.",
   "files": {
     "apple-silicon": {
-      "name": "FCPXML-to-AAF-v0.4.0-mac-apple-silicon.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.4.0-mac-apple-silicon.zip",
-      "size": 33896779,
-      "sha256": "8592228d8c1f84dab2f129cb3be6c1dc96129507ee1a74218c4fd8cd11aae348"
+      "name": "FCPXML-to-AAF-v0.5.0-mac-apple-silicon.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.5.0-mac-apple-silicon.zip",
+      "size": 33897353,
+      "sha256": "4c2962babc1e85a68a56dd5c72749c3ea40275ddd4fed38deb737ad0bb17ad08"
     },
     "intel": {
-      "name": "FCPXML-to-AAF-v0.4.0-mac-intel.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.4.0-mac-intel.zip",
-      "size": 35714125,
-      "sha256": "4ae68f80f4d9fa730683f372477e9433a868d6252fa7ebd233cf73eca343be21"
+      "name": "FCPXML-to-AAF-v0.5.0-mac-intel.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.5.0-mac-intel.zip",
+      "size": 35714699,
+      "sha256": "078bd97c51e5b516d96b35c9dda6ccf9cd6941be6526aa24ffffd11ee79cf731"
     }
   }
 }

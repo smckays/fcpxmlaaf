@@ -1,0 +1,111 @@
+<!doctype html><html><head><meta charset="utf-8"><title>D · Blackout Patchbay</title>
+<style>
+/* Direction D: B's black/white/yellow palette on C's patchbay layout, plus channel-level track routing and a Preflight panel. */
+:root{--bg:#000;--ink:#fff;--mute:#8c8c8c;--line:#2c2c2c;--card:#0d0d0d;--accent:#ffe600;--bad:#ff4d3d;--warn:#ffb020;--ok:#3ddc84;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;--mono:"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%}body{background:var(--bg);color:var(--ink);font:13px/1.4 var(--ui);-webkit-font-smoothing:antialiased}
+.app{height:100vh;display:grid;grid-template-columns:1fr 330px;grid-template-rows:auto 1fr auto}
+.top{grid-column:1/3;display:grid;grid-template-columns:1fr auto;align-items:end;padding:22px 32px 18px;border-bottom:1px solid var(--line)}
+.top h1{margin:0;font-size:34px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.meta{color:var(--mute);margin-top:7px}.meta b{color:var(--ink);font-family:var(--mono);font-weight:500}
+.acts{display:flex;gap:10px}
+.ghost{font:600 13px var(--ui);color:var(--ink);background:none;border:1px solid #4a4a4a;border-radius:999px;padding:8px 16px}
+.bay{display:grid;grid-template-columns:1fr 150px 1.15fr;padding:22px 32px;min-height:0;overflow:hidden}
+.h{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 12px}
+.src,.dst{display:grid;gap:8px;align-content:start}
+.row{display:flex;align-items:center;justify-content:space-between;border:1px solid #3a3a3a;border-radius:10px;padding:0 14px;height:46px;background:var(--card)}
+.row .n{font-weight:700}.row .s{font:12px var(--mono);color:var(--mute)}
+.jack{width:11px;height:11px;border-radius:50%;background:var(--ink);flex:none}
+.row.sel{border-color:var(--accent)}.row.sel .jack{background:var(--accent)}
+.row.off{opacity:.4;border-style:dashed}.row.off .jack{background:none;border:1.5px solid var(--ink)}
+.row.err{border-color:var(--bad)}.row.err .jack{background:var(--bad)}
+.dst .row{justify-content:flex-start;gap:12px;height:auto;min-height:46px;padding:9px 14px}
+.trkname{font:700 13px var(--mono);min-width:44px}
+.chan{font:12px var(--ui);color:var(--mute)}.chan b{color:var(--ink);font-weight:600}
+.grip{margin-left:auto;color:#555;font-size:15px;letter-spacing:-2px}
+.grp{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);margin:6px 0 -2px 4px}
+svg{display:block;width:100%;height:440px;overflow:visible}
+.pre{grid-column:2;grid-row:2/4;border-left:1px solid var(--line);padding:22px 22px;display:grid;grid-template-rows:auto 1fr auto;gap:14px;min-height:0}
+.pre h2{margin:0;font-size:20px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.count{font:700 12px var(--ui);background:var(--bad);color:#000;border-radius:999px;padding:2px 9px}
+.issues{display:grid;gap:10px;align-content:start;overflow:auto}
+.iss{border:1px solid #333;border-left:4px solid var(--c);border-radius:8px;padding:11px 12px;display:grid;gap:7px;background:var(--card)}
+.iss .t{font-weight:700;display:flex;gap:7px;align-items:baseline}
+.iss .t i{font-style:normal;white-space:nowrap;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--c)}
+.iss p{margin:0;color:#cfcfcf;font-size:12.5px}
+.fix{justify-self:start;font:700 12px var(--ui);background:var(--ink);color:#000;border:0;border-radius:999px;padding:6px 12px}
+.fix.alt{background:none;color:var(--ink);border:1px solid #555}
+.okline{color:var(--mute);font-size:12px;display:grid;gap:5px}.okline span::before{content:"✓  ";color:var(--ok);font-weight:700}
+.export{font:800 17px var(--ui);background:#3a3a3a;color:#8a8a8a;border:0;border-radius:14px;padding:16px;width:100%}
+.exnote{font-size:12px;color:var(--mute);text-align:center;margin-top:7px}
+.strip{grid-column:1;border-top:1px solid var(--line);padding:12px 32px 16px;display:grid;grid-template-columns:62px 1fr;gap:5px 0;align-items:center}
+.strip .hh{grid-column:1/3;display:flex;justify-content:space-between;margin-bottom:3px}
+.ruler{display:none}.tracks{display:contents}.trk{display:contents}.trk b{font:600 11px var(--mono);color:var(--mute)}
+.lane{position:relative;height:12px;background:#151515;border-radius:2px}
+.clip{position:absolute;top:0;bottom:0;background:var(--ink);font-size:0;border-radius:2px}
+.clip.lt{background:#9a9a9a}
+.xf{position:absolute;top:-2px;bottom:-2px;background:var(--accent);border-radius:2px}
+.gain{display:none}
+.bad-lane .clip{background:var(--bad)}
+</style></head><body><div class="app">
+<div class="top"><div><h1>Test Cut v1</h1><div class="meta"><b>01:00:00:00</b> &nbsp;·&nbsp; 50 s &nbsp;·&nbsp; 23.976 fps &nbsp;·&nbsp; 5 media files online</div></div>
+<div class="acts"><button class="ghost">Open…</button><button class="ghost">Preset: Show Mix</button><button class="ghost">Settings</button></div></div>
+
+<div class="bay">
+  <div><div class="h">Final Cut audio</div><div class="src">
+    <div class="row sel"><div><div class="n">Recorder 4ch · ch 1</div><div class="s">Dialogue · Boom</div></div><span class="jack"></span></div>
+    <div class="row sel"><div><div class="n">Recorder 4ch · ch 2</div><div class="s">Dialogue · Lav 1</div></div><span class="jack"></span></div>
+    <div class="row sel"><div><div class="n">Recorder 4ch · ch 3</div><div class="s">Dialogue · Lav 2</div></div><span class="jack"></span></div>
+    <div class="row off"><div><div class="n">Recorder 4ch · ch 4</div><div class="s">copy of ch 3</div></div><span class="jack"></span></div>
+    <div class="row err"><div><div class="n">Interview A001 · camera</div><div class="s">scratch mic · 2 ch</div></div><span class="jack"></span></div>
+    <div class="row"><div><div class="n">Music · Score</div><div class="s">2 ch</div></div><span class="jack"></span></div>
+    <div class="row"><div><div class="n">Effects · Doors, Ambience</div><div class="s">1 ch</div></div><span class="jack"></span></div>
+  </div></div>
+  <div><div class="h">&nbsp;</div><svg viewBox="0 0 150 440" preserveAspectRatio="none" aria-hidden="true"><g fill="none" stroke-width="2">
+    <path d="M0 23 C75 23 75 23 150 23" stroke="#ffe600"/>
+    <path d="M0 77 C75 77 75 84 150 84" stroke="#ffe600"/>
+    <path d="M0 131 C75 131 75 145 150 145" stroke="#ffe600"/>
+    <path d="M0 239 C75 239 75 206 150 206" stroke="#ff4d3d" stroke-dasharray="5 4"/>
+    <path d="M0 293 C75 293 75 290 150 290" stroke="#fff"/>
+    <path d="M0 347 C75 347 75 368 150 368" stroke="#fff"/>
+  </g></svg></div>
+  <div><div class="h">AAF tracks · drag to reorder</div><div class="dst">
+    <div class="row sel"><span class="jack"></span><span class="trkname">DX 1</span><span class="chan"><b>Boom</b> · always this track</span><span class="grip">⋮⋮</span></div>
+    <div class="row sel"><span class="jack"></span><span class="trkname">DX 2</span><span class="chan"><b>Lav 1</b> · always this track</span><span class="grip">⋮⋮</span></div>
+    <div class="row sel"><span class="jack"></span><span class="trkname">DX 3</span><span class="chan"><b>Lav 2</b> · always this track</span><span class="grip">⋮⋮</span></div>
+    <div class="row err"><span class="jack"></span><span class="trkname">DX 4</span><span class="chan"><b>Camera scratch</b> · would be added</span><span class="grip">⋮⋮</span></div>
+    <div class="grp">MUSIC</div>
+    <div class="row"><span class="jack"></span><span class="trkname">MX 1–2</span><span class="chan"><b>Score</b> · L / R</span><span class="grip">⋮⋮</span></div>
+    <div class="grp">EFFECTS</div>
+    <div class="row"><span class="jack"></span><span class="trkname">FX 1–2</span><span class="chan"><b>Doors, Ambience</b> · overlaps spill to FX 2</span><span class="grip">⋮⋮</span></div>
+  </div></div>
+</div>
+
+<aside class="pre">
+  <h2>Preflight <span class="count">1 to fix</span></h2>
+  <div class="issues">
+    <div class="iss" style="--c:var(--bad)"><div class="t"><i>MUST FIX</i>Camera scratch audio is going out</div>
+      <p>Interview A001's camera mic would land on DX 4. Your recorder already covers the same moments, so the mixer would hear both, out of phase.</p>
+      <button class="fix">Leave camera audio out</button></div>
+    <div class="iss" style="--c:var(--warn)"><div class="t"><i>CHECK</i>Lav 1 clips at 01:00:07:10</div>
+      <p>Recorder ch 2 hits 0 dBFS for 1.2 s. That distortion is in the original recording, so the AAF can't fix it, but the mixer should know.</p>
+      <button class="fix alt">Show on timeline</button></div>
+    <div class="iss" style="--c:var(--warn)"><div class="t"><i>CHECK</i>Ch 4 is a copy of ch 3</div>
+      <p>Same audio sample for sample: a backup channel. Already left out. Click to include it anyway.</p>
+      <button class="fix alt">Include ch 4</button></div>
+    <div class="okline"><span>All media online, every clip has 5 s of handles</span><span>Timecode 01:00:00:00 at 23.976 matches the media</span><span>2 crossfades fit within their handles</span><span>Matches the “Show Mix” track template</span></div>
+  </div>
+  <div><button class="export">Export AAF</button><div class="exnote">Fix the red item to export. After export, every clip is checked against its source audio.</div></div>
+</aside>
+
+<div class="strip"><div class="hh"><span class="h" style="margin:0">AAF preview</span><span style="color:var(--mute);font-size:12px">13 clips · 8 clip gain · 6 fades · 2 crossfades</span></div>
+  <div class="ruler" id="r"></div><div class="tracks" id="t"></div></div>
+</div>
+<script src="data.js"></script>
+<script>
+TRACKS = [["DX 1",[["",0,5.5],["",4.5,13,"","xf"],["",26,31]]],["DX 2",[["",0,5.5],["",4.5,13,"","xf"],["",26,31]]],["DX 3",[["",4.5,13]]],
+  ["DX 4",[["",0,5.5],["",26,31]]],["MX 1",[["",1,21]]],["MX 2",[["",1,21]]],["FX 1",[["",13,21],["",23.5,26]]],["FX 2",[["",14,18]]]];
+render({ruler:'r',tracks:'t',light:['MX','FX'],short:true});
+document.querySelectorAll('.trk')[3].querySelector('.lane').classList.add('bad-lane');
+</script>
+</body></html>

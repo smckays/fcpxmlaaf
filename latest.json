@@ -1,18 +1,18 @@
 {
-  "version": "0.6.0",
-  "notes": "Fixed tracks per channel: click a role, then set a channel to \"+ new named track\" (for example recorder ch 1 -> Boom). It lands on that track in every export.\nEach group's Tracks panel lists its named tracks (rename, reorder) and chooses Pack or Checkerboard for the rest.\nNudge a role by frames to fix sync, and set a different start timecode under Settings.\nPresets remember all of it.",
+  "version": "0.7.0",
+  "notes": "The app now listens to your source audio in the background. Preflight points out:\n- distortion in the original recordings, with timecode and a \"Show on timeline\" marker\n- silent channels (dead mic, unused input), with a fix to leave them out\n- duplicate channels and -10 dB safety copies, with a fix to leave them out\nHot 32-bit float recordings are kept undistorted in the AAF automatically.",
   "files": {
     "apple-silicon": {
-      "name": "FCPXML-to-AAF-v0.6.0-mac-apple-silicon.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.6.0-mac-apple-silicon.zip",
-      "size": 33901526,
-      "sha256": "b762bc1e1f1d268ca6281d6327abb2e67f2a0b16c583ab3169c772b592380f34"
+      "name": "FCPXML-to-AAF-v0.7.0-mac-apple-silicon.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.7.0-mac-apple-silicon.zip",
+      "size": 33908763,
+      "sha256": "1a6ecbed51133029b33a19373520220f84a663701ae06192a0b8e354c78a10d6"
     },
     "intel": {
-      "name": "FCPXML-to-AAF-v0.6.0-mac-intel.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.6.0-mac-intel.zip",
-      "size": 35718872,
-      "sha256": "f3a0f0e88fa556db2480b2c5784974006e7b79073f1795d8a551eacc12785864"
+      "name": "FCPXML-to-AAF-v0.7.0-mac-intel.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.7.0-mac-intel.zip",
+      "size": 35726109,
+      "sha256": "928aa215fbefdca34c7f0fc6edcce837fa9c130d16558f353c57e81ad74225bd"
     }
   }
 }

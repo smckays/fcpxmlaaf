@@ -1,18 +1,18 @@
 {
-  "version": "0.7.0",
-  "notes": "The app now listens to your source audio in the background. Preflight points out:\n- distortion in the original recordings, with timecode and a \"Show on timeline\" marker\n- silent channels (dead mic, unused input), with a fix to leave them out\n- duplicate channels and -10 dB safety copies, with a fix to leave them out\nHot 32-bit float recordings are kept undistorted in the AAF automatically.",
+  "version": "0.8.0",
+  "notes": "Every export is now checked: the app re-opens the AAF it just wrote and confirms the tracks, timecode, every clip's position and clip gain, and that the audio matches your source files sample for sample.\nYou'll see \"AAF written and verified\". If anything is off, the report says which clip, where, and by how much.\nAlso: duplicate-channel detection in Preflight is more accurate.",
   "files": {
     "apple-silicon": {
-      "name": "FCPXML-to-AAF-v0.7.0-mac-apple-silicon.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.7.0-mac-apple-silicon.zip",
-      "size": 33908763,
-      "sha256": "1a6ecbed51133029b33a19373520220f84a663701ae06192a0b8e354c78a10d6"
+      "name": "FCPXML-to-AAF-v0.8.0-mac-apple-silicon.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.8.0-mac-apple-silicon.zip",
+      "size": 33914051,
+      "sha256": "b14d8f4057a018ba5b3bec2a36e16fc726c320595e69baf39824c8c5ff8cb9f3"
     },
     "intel": {
-      "name": "FCPXML-to-AAF-v0.7.0-mac-intel.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.7.0-mac-intel.zip",
-      "size": 35726109,
-      "sha256": "928aa215fbefdca34c7f0fc6edcce837fa9c130d16558f353c57e81ad74225bd"
+      "name": "FCPXML-to-AAF-v0.8.0-mac-intel.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.8.0-mac-intel.zip",
+      "size": 35731397,
+      "sha256": "9ad818b03e9958b2b8c67ead2d65d042a66eddca79ff9b89879419f8a9da5201"
     }
   }
 }

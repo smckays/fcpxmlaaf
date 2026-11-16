@@ -110,7 +110,7 @@ class PCMWav:
         self.width = self.bits // 8
         self.frames = self.data_size // self.align
 
-    def extract_channel(self, channel: int, start_frame: int, n_frames: int, out_path: str) -> int:
+    def extract_channel(self, channel: int, start_frame: int, n_frames: int, out_path: str, gain: float = 1.0) -> int:
         start_frame = max(0, start_frame)
         n_frames = max(0, min(n_frames, self.frames - start_frame))
         with open(self.path, "rb") as fh:
@@ -129,6 +129,7 @@ class PCMWav:
                 fa.byteswap()
             pcm = bytearray(len(fa) * 3)
             for i, v in enumerate(fa):
+                v *= gain
                 x = int(round((1.0 if v > 1.0 else -1.0 if v < -1.0 else v) * 8388607.0))
                 pcm[3 * i:3 * i + 3] = (x & 0xFFFFFF).to_bytes(3, "little")
             out, w = pcm, 3
@@ -191,7 +192,7 @@ class Extractor:
         self._probe[path] = chans
         return chans
 
-    def _ffmpeg_extract(self, path, channel, start_sec, dur_sec, out_path):
+    def _ffmpeg_extract(self, path, channel, start_sec, dur_sec, out_path, gain_db=0.0):
         streams = self._stream_channels(path)
         if not streams:
             raise MediaError("no audio streams found")
@@ -200,9 +201,10 @@ class Extractor:
             raise MediaError("channel %d requested but file has %d" % (channel, total))
         if len(streams) > 1:
             fc = "".join("[0:a:%d]" % i for i in range(len(streams))) + \
-                 "amerge=inputs=%d,pan=mono|c0=c%d[out]" % (len(streams), channel - 1)
+                 "amerge=inputs=%d,pan=mono|c0=c%d" % (len(streams), channel - 1)
         else:
-            fc = "[0:a:0]pan=mono|c0=c%d[out]" % (channel - 1)
+            fc = "[0:a:0]pan=mono|c0=c%d" % (channel - 1)
+        fc += (",volume=%.2fdB[out]" % gain_db) if gain_db else "[out]"
         codec = {16: "pcm_s16le", 24: "pcm_s24le", 32: "pcm_s32le"}[self.bits]
         cmd = [self.ffmpeg, "-nostdin", "-v", "error", "-y", "-ss", "%.6f" % start_sec, "-i", path,
                "-t", "%.6f" % dur_sec, "-filter_complex", fc, "-map", "[out]",
@@ -230,14 +232,15 @@ class Extractor:
             self._converted[path] = tmp
         return PCMWav(self._converted[path])
 
-    def extract(self, path: str, channel: int, start_sec: float, dur_sec: float, out_path: str) -> int:
-        """Returns number of sample frames written."""
+    def extract(self, path: str, channel: int, start_sec: float, dur_sec: float, out_path: str, gain_db: float = 0.0) -> int:
+        """Returns number of sample frames written. gain_db lowers/raises the audio as it's extracted."""
         if self.ffmpeg:
-            self._ffmpeg_extract(path, channel, start_sec, dur_sec, out_path)
+            self._ffmpeg_extract(path, channel, start_sec, dur_sec, out_path, gain_db)
         else:
             w = self._as_wav(path)
             if channel > w.channels:
                 raise MediaError("channel %d requested but file has %d" % (channel, w.channels))
-            w.extract_channel(channel, int(round(start_sec * w.rate)), int(round(dur_sec * w.rate)), out_path)
+            w.extract_channel(channel, int(round(start_sec * w.rate)), int(round(dur_sec * w.rate)), out_path,
+                              10 ** (gain_db / 20.0))
         with wave.open(out_path, "rb") as r:
             return r.getnframes()

@@ -124,6 +124,7 @@ def scan_info(path: str, project: str = None, roots=()) -> dict:
     rl = Relinker([here] + list(roots or []))
     paths = sorted({e.asset.path for e in tl.events if e.asset.path})
     missing = [m for m in paths if not rl.find(m)]
+    LISTEN.want([rl.find(m) for m in paths if rl.find(m)])
     fps = 1 / tl.frame_duration
     return {
         "path": path, "name": os.path.basename(os.path.normpath(path)),
@@ -183,10 +184,91 @@ def preview(path: str, preset: dict, project: str = None, roots=()) -> dict:
         out.append({"name": t.name, "group": t.group, "clips": len(t.items), "named": t.named,
                     "sources": sorted({"%s ch%d" % (m.ev.role, m.channel) for m in t.items}),
                     "roles": sorted({m.ev.role for m in t.items}), "items": items})
-    pf = preflight_mod.run(tl, parser, pr, tracks, notes, rl)
-    return {"tracks": out, "notes": notes, "preflight": pf, "duration": round(float(tl.duration), 4),
+    from fcpxml2aaf.mapping import routed_events
+    audio = LISTEN.for_preflight([e.asset.path for e, _ in routed_events(tl.events, pr) if e.asset.path], rl)
+    pf = preflight_mod.run(tl, parser, pr, tracks, notes, rl, audio)
+    return {"tracks": out, "notes": notes, "preflight": pf, "listening": bool(audio and audio["pending"]),
+            "duration": round(float(tl.duration), 4),
             "tc_start": round(float(tc_start), 4), "fps": float(fps), "drop": tl.drop_frame,
             "offline_clips": sum(1 for t in out for i in t["items"] if i["offline"])}
+
+
+# ---------------- listening (audio analysis) ----------------
+class Listener:
+    """Reads each source file once in the background; results are cached by path, size and date."""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.results = {}   # resolved path -> (stamp, analysis)
+        self.errors = {}    # resolved path -> message
+        self.queue = []
+        self.busy = False
+        self._ex = None
+
+    def _stamp(self, p):
+        try:
+            st = os.stat(p)
+            return (st.st_mtime, st.st_size)
+        except OSError:
+            return None
+
+    def done(self, p):
+        r = self.results.get(p)
+        return bool(r) and r[0] == self._stamp(p)
+
+    def want(self, paths):
+        if not find_tool("ffmpeg"):
+            return
+        with self.lock:
+            for p in paths:
+                if p and not self.done(p) and p not in self.errors and p not in self.queue:
+                    self.queue.append(p)
+            if self.queue and not self.busy:
+                self.busy = True
+                threading.Thread(target=self._work, daemon=True).start()
+
+    def _work(self):
+        from fcpxml2aaf.analysis import analyze_file
+        from fcpxml2aaf.media import Extractor
+        if self._ex is None:
+            self._ex = Extractor(48000, 24, tempfile.gettempdir())
+        while True:
+            with self.lock:
+                if not self.queue:
+                    self.busy = False
+                    return
+                p = self.queue[0]
+            try:
+                res = analyze_file(p, self._ex.ffmpeg, self._ex._stream_channels(p))
+                with self.lock:
+                    self.results[p] = (self._stamp(p), res)
+            except Exception as e:
+                with self.lock:
+                    self.errors[p] = str(e) or e.__class__.__name__
+            with self.lock:
+                if self.queue and self.queue[0] == p:
+                    self.queue.pop(0)
+
+    def for_preflight(self, originals, relinker):
+        """{"results": {original path: analysis}, "pending", "total", "errors"} for these source files."""
+        if not find_tool("ffmpeg"):
+            return None
+        res, pending, errs, resolved = {}, 0, {}, []
+        for o in sorted(set(originals)):
+            r = relinker.find(o)
+            if not r:
+                continue
+            resolved.append(r)
+            if self.done(r):
+                res[o] = self.results[r][1]
+            elif r in self.errors:
+                errs[o] = self.errors[r]
+            else:
+                pending += 1
+        self.want(resolved)
+        return {"results": res, "pending": pending, "total": len(resolved), "errors": errs}
+
+
+LISTEN = Listener()
 
 
 # ---------------- export jobs ----------------
@@ -219,8 +301,9 @@ def run_export(path, preset, out_dir, project, media_roots):
         job.done, job.total = d, t
 
     try:
+        cached = {p: r[1] for p, r in LISTEN.results.items()}
         aaf, rep = convert(path, None, out_dir, project, media_roots, False, log=lambda s: job.log.append(s),
-                           progress=prog, preset=preset)
+                           progress=prog, preset=preset, audio_cache=cached)
         job.aaf, job.report_path = aaf, rep
         with open(rep, encoding="utf-8") as fh:
             job.report = fh.read()

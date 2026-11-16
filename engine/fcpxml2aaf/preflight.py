@@ -30,7 +30,8 @@ def _opt(name, value):
     return "option:%s=%s" % (name, json.dumps(value))
 
 
-def run(tl, parser, preset: dict, tracks, notes, relinker) -> dict:
+def run(tl, parser, preset: dict, tracks, notes, relinker, audio: dict = None) -> dict:
+    """audio: {"results": {asset path: analysis}, "pending": files still being read, "total": files} or None."""
     opts = preset["options"]
     issues: List[dict] = []
     ok: List[str] = []
@@ -154,6 +155,25 @@ def run(tl, parser, preset: dict, tracks, notes, relinker) -> dict:
     if parser.n_transitions:
         ok.append("1 cross dissolve becomes a crossfade" if parser.n_transitions == 1 else
                   "%d cross dissolves become crossfades" % parser.n_transitions)
+
+    # --- listening to the audio itself
+    if audio is not None:
+        from .analysis import audio_checks
+        tc0 = effective_tc_start(tl, opts)
+        a_issues, a_ok = audio_checks(exported, audio.get("results") or {},
+                                      lambda sec: tc_string(tc0 + Fraction(sec).limit_denominator(48000), tl.frame_duration, tl.drop_frame),
+                                      verify=audio.get("verify"), headroom=opts.get("float_headroom", True))
+        issues.extend(a_issues)
+        if audio.get("pending"):
+            add({"id": "listening", "level": "info", "title": "Listening to the audio…",
+                 "detail": "Checking %d of %d source file%s for distortion, silent channels and duplicate channels. "
+                           "You can keep working; results appear here." % (audio["total"] - audio["pending"], audio["total"],
+                                                                         "" if audio["total"] == 1 else "s")})
+        else:
+            ok.extend(a_ok)
+        for f, err in (audio.get("errors") or {}).items():
+            add({"id": "listenerr:" + f, "level": "info", "title": "Couldn't listen to %s" % os.path.basename(f),
+                 "detail": "Its audio wasn't checked (%s). It will still export." % err})
 
     ok.append("Starts at %s%s, %.3f fps%s" % (tc_string(effective_tc_start(tl, opts), tl.frame_duration, tl.drop_frame),
                                              " (override)" if parse_tc(opts.get("start_tc") or "", tl.frame_duration, tl.drop_frame) is not None else "",

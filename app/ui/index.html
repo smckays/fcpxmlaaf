@@ -147,6 +147,11 @@ svg.wires { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 
 .clip.offline { background: var(--bad) }
 .clip.camera { background: repeating-linear-gradient(135deg, var(--clip-a) 0 4px, var(--warn) 4px 7px) }
 .xf { position: absolute; top: -2px; bottom: -2px; background: var(--accent); border-radius: 2px; pointer-events: none }
+.lanes { position: relative }
+.mark { position: absolute; top: -6px; bottom: -4px; width: 2px; background: var(--bad); pointer-events: none; z-index: 2 }
+.mark span { position: absolute; top: -14px; left: 4px; font: 700 10px var(--mono); color: var(--bad); white-space: nowrap }
+.spin { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--mute); border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 6px }
+@keyframes spin { to { transform: rotate(360deg) } }
 .tcrow { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--mute); margin: 4px 0 0 84px }
 .hoverinfo { min-height: 16px; font: 11px var(--mono); color: var(--mute); margin-top: 6px }
 
@@ -239,6 +244,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   <h3 id="setT">Export settings</h3>
   <div class="form">
     <label for="oCam">Camera audio</label><select id="oCam"><option value="include">Include (Preflight warns when a recorder covers it)</option><option value="auto">Leave out where a recorder covers it</option><option value="keep">Always include</option><option value="exclude">Never include</option></select>
+    <label for="oHead">Hot float audio</label><select id="oHead"><option value="true">Keep intact (lower it, add clip gain back)</option><option value="false">Write as is (clips above full scale)</option></select>
     <label for="oMuted">Muted clips</label><select id="oMuted"><option value="false">Include</option><option value="true">Leave out</option></select>
     <label for="oLevels">Volume levels</label><select id="oLevels"><option value="clip_gain">As clip gain</option><option value="off">Leave out (flat)</option></select>
     <label for="oFades">Fades</label><select id="oFades"><option value="aaf">Real fades and crossfades</option><option value="gain">Drawn into clip gain</option><option value="off">Leave out</option></select>
@@ -306,7 +312,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   function mainOf(r) { return r.split(".")[0].toLowerCase() }
 
   var S = { scan: null, roles: {}, groups: [], mediaRoots: [], out: null, project: null, presets: [], pv: null, sel: null, dismissed: {},
-    options: { handles_sec: 5, sample_rate: 48000, bit_depth: 24, edit_rate: "frame", unmapped: "by_main_role", levels: "clip_gain", fades: "aaf", camera_audio: "include", skip_muted: false, start_tc: "" }, open: {} };
+    options: { handles_sec: 5, sample_rate: 48000, bit_depth: 24, edit_rate: "frame", unmapped: "by_main_role", levels: "clip_gain", fades: "aaf", camera_audio: "include", skip_muted: false, start_tc: "", float_headroom: true }, open: {} };
 
   // ---------- dialogs ----------
   function openDlg(id) { $(id).hidden = false; var f = $(id).querySelector("button, select, input"); if (f) f.focus() }
@@ -348,7 +354,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   function openPath(path, project) {
     api("scan", { path: path, project: project || null, media_roots: S.mediaRoots }).then(function (info) {
       var sameFile = S.scan && S.scan.path === info.path;
-      S.scan = info; S.project = project || null; S.out = info.default_out; S.sel = null;
+      S.scan = info; S.project = project || null; S.out = info.default_out; S.sel = null; S.marker = null;
       if (!sameFile) S.dismissed = {};
       Object.keys(info.roles).forEach(function (role) {
         if (!S.roles[role]) S.roles[role] = { group: DEFAULT_GROUP[mainOf(role)] || role.split(".")[0], channels: "", pins: {}, nudge: 0 };
@@ -529,6 +535,8 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
       api("preview", { path: S.scan.path, project: S.project, preset: buildPreset(), media_roots: S.mediaRoots }).then(function (r) {
         if (seq !== pvSeq) return;
         S.pv = r; renderSrc(); renderDst(); drawStrip(); renderPreflight();
+        clearTimeout(S.listenTimer);
+        if (r.listening) S.listenTimer = setTimeout(refreshPreview, 1500);
       }).catch(function (e) { showError(e.message) });
     }, 110);
   }
@@ -544,7 +552,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
       var b = "";
       if (i.fix) b += '<button class="solid" type="button" data-act="' + esc(i.fix.action) + '" data-id="' + esc(i.id) + '">' + esc(i.fix.label) + "</button>";
       if (i.alt) b += '<button class="pill" type="button" data-act="' + esc(i.alt.action) + '" data-id="' + esc(i.id) + '">' + esc(i.alt.label) + "</button>";
-      return '<div class="iss" style="--c:' + LBL[i.level][1] + '"><div class="tt"><i>' + LBL[i.level][0] + "</i>" + esc(i.title) + "</div><p>" + esc(i.detail) + "</p>" + (b ? '<div class="btns">' + b + "</div>" : "") + "</div>";
+      return '<div class="iss" style="--c:' + LBL[i.level][1] + '"><div class="tt"><i>' + (i.id === "listening" ? '<span class="spin"></span>' : LBL[i.level][0]) + "</i>" + esc(i.title) + "</div><p>" + esc(i.detail) + "</p>" + (b ? '<div class="btns">' + b + "</div>" : "") + "</div>";
     }).join("") + '<div class="oks">' + pf.ok.map(function (o) { return "<span>" + esc(o) + "</span>" }).join("") + "</div>";
     var can = !errs && S.pv.tracks.some(function (t) { return t.clips });
     $("exportBtn").disabled = !can || exporting;
@@ -556,6 +564,17 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
     if (act.indexOf("option:") === 0) {
       var kv = act.slice(7), k = kv.slice(0, kv.indexOf("=")), v = JSON.parse(kv.slice(kv.indexOf("=") + 1));
       S.options[k] = v; renderSettings(); refreshPreview();
+    } else if (act.indexOf("show:") === 0) {
+      S.marker = +act.slice(5); drawStrip();
+      $("strip").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    } else if (act.indexOf("channels:") === 0) {
+      var rc = act.slice(9), cut = rc.lastIndexOf("|"), role = rc.slice(0, cut), drop = +rc.slice(cut + 1), m = S.roles[role];
+      if (m && S.scan.roles[role]) {
+        var all = []; for (var c = 1; c <= Math.max(1, S.scan.roles[role].max_channels); c++) all.push(c);
+        var cur = (parseChannels(m.channels) || all).filter(function (c) { return c !== drop });
+        if (cur.length) { m.channels = cur.length === all.length ? "" : cur.join(","); if (m.pins) delete m.pins[drop] }
+        renderSrc(); refreshPreview();
+      }
     } else if (act === "locate_media") locate();
     else if (act === "dismiss") { S.dismissed[id] = 1; renderPreflight() }
   });
@@ -581,6 +600,8 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
       });
       html += "</div>";
     });
+    if (S.marker != null && S.marker >= 0 && S.marker <= D)
+      html += '<div class="mark" style="left:calc(84px + (100% - 84px) * ' + (S.marker / D) + ')"><span>' + tc(S.marker) + "</span></div>";
     $("lanes").innerHTML = html || '<span></span><span class="note" style="text-align:left">Nothing routed to a track yet.</span>';
     $("tcrow").innerHTML = [0, .25, .5, .75, 1].map(function (f) { return "<span>" + tc(D * f) + "</span>" }).join("");
     var n = pv.tracks.reduce(function (a, t) { return a + t.clips }, 0);
@@ -680,6 +701,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   // ---------- settings ----------
   function renderSettings() {
     var o = S.options;
+    $("oHead").value = String(o.float_headroom !== false);
     $("oCam").value = o.camera_audio; $("oMuted").value = String(!!o.skip_muted); $("oLevels").value = o.levels; $("oFades").value = o.fades;
     $("oHandles").value = o.handles_sec; $("oRate").value = o.sample_rate + "/" + o.bit_depth; $("oEdit").value = o.edit_rate; $("oUnmapped").value = o.unmapped;
     $("oTc").value = o.start_tc || ""; $("oTc").placeholder = S.scan ? S.scan.start_timecode : "from the timeline";
@@ -687,7 +709,8 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   $("settingsBtn").onclick = function () { renderSettings(); openDlg("settingsDlg") };
   $("settingsDlg").addEventListener("change", function (e) {
     var t = e.target, o = S.options;
-    if (t.id === "oCam") o.camera_audio = t.value;
+    if (t.id === "oHead") o.float_headroom = t.value === "true";
+    else if (t.id === "oCam") o.camera_audio = t.value;
     else if (t.id === "oMuted") o.skip_muted = t.value === "true";
     else if (t.id === "oLevels") o.levels = t.value;
     else if (t.id === "oFades") o.fades = t.value;

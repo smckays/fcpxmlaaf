@@ -29,7 +29,7 @@ def safe_name(s: str) -> str:
 
 
 def convert(input_path, preset_path=None, out_dir=None, project=None, media_roots=(), dry_run=False, log=print,
-            progress=None, preset=None):
+            progress=None, preset=None, audio_cache=None):
     """progress: optional callback(done, total). preset: a preset dict (instead of a file path)."""
     if preset is not None:
         import json as _json, tempfile as _tf
@@ -101,17 +101,41 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
     work = tempfile.mkdtemp(prefix="fcpxml2aaf_")
     ex = Extractor(sr, int(opts["bit_depth"]), work)
     from . import preflight as _pf
-    pf = _pf.run(tl, parser, preset, tracks, notes, relinker)
-    if pf["issues"]:
+    audio = None
+    if ex.ffmpeg:  # listen to the source audio (reuses the app's results when it has them)
+        from .analysis import analyze_file
+        from .mapping import routed_events
+        results = {}
+        for o in sorted({e.asset.path for e, _ in routed_events(tl.events, preset) if e.asset.path}):
+            r = relinker.find(o)
+            if not r:
+                continue
+            if audio_cache and r in audio_cache:
+                results[o] = audio_cache[r]
+                continue
+            try:
+                results[o] = analyze_file(r, ex.ffmpeg, ex._stream_channels(r))
+            except Exception:
+                pass
+        from .analysis import residual_db
+
+        def _verify(path, a, b, off, start, dur):
+            r = relinker.find(path)
+            return residual_db(r, ex.ffmpeg, ex._stream_channels(r), a, b, off, start, dur) if r else None
+        audio = {"results": results, "pending": 0, "total": len(results), "verify": _verify}
+    pf = _pf.run(tl, parser, preset, tracks, notes, relinker, audio)
+    if pf["issues"] or pf["ok"]:
         R("PREFLIGHT")
         for i in pf["issues"]:
             R("  [%s] %s: %s" % ({"error": "MUST FIX", "warn": "CHECK", "info": "NOTE"}[i["level"]], i["title"], i["detail"]))
+        for line in pf["ok"]:
+            R("  [OK] " + line)
         R("")
     log("Audio engine: " + ex.describe())
     errors = []
     levels_mode = opts.get("levels", "clip_gain")
     fades_mode = opts.get("fades", "aaf")
-    stats = {"gain_clips": 0, "fades": 0, "baked_fades": 0, "crossfades": 0}
+    stats = {"gain_clips": 0, "fades": 0, "baked_fades": 0, "crossfades": 0, "headroom": 0}
     handle = Fraction(opts["handles_sec"]).limit_denominator(1000)
     total = sum(len(tr.items) for tr in tracks)
     done = 0
@@ -160,7 +184,13 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     want_sec = Fraction(pre + length) / rate + handle
                     wav = os.path.join(work, "c%05d.wav" % done)
                     try:
-                        frames = ex.extract(src, m.channel, float(start_sec), float(want_sec), wav)
+                        att = 0.0
+                        if audio and opts.get("float_headroom", True):
+                            from .analysis import headroom_db
+                            att = headroom_db(audio["results"].get(ev.asset.path), ev, m.channel)
+                            if att:
+                                stats["headroom"] += 1
+                        frames = ex.extract(src, m.channel, float(start_sec), float(want_sec), wav, -att)
                     except MediaError as e:
                         errors.append("MEDIA ERROR  %s ch%d: %s" % (os.path.basename(src), m.channel, e))
                         continue
@@ -183,7 +213,7 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     mslot.segment.length = int(math.floor(Fraction(frames, sr) * rate))
                     mslot["PhysicalTrackNumber"].value = 1
                     os.remove(wav)
-                    placed.append((s, length, mm, mslot.slot_id, pre, ev, xfade))
+                    placed.append((s, length, mm, mslot.slot_id, pre, ev, xfade, att))
                     last_end = s + length
                     if done % 25 == 0:
                         log("  %d / %d clips" % (done, total))
@@ -192,7 +222,7 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
 
                 # Lay the clips out with filler, clip gain, fades and crossfades.
                 pos, owed = 0, 0
-                for i, (s, length, mm, slot_id, pre, ev, xfade) in enumerate(placed):
+                for i, (s, length, mm, slot_id, pre, ev, xfade, att) in enumerate(placed):
                     nxt = placed[i + 1] if i + 1 < len(placed) else None
                     xfade_out = nxt[6] if nxt is not None else 0
                     fi = fo = 0
@@ -208,7 +238,10 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     if fades_mode == "aaf" and (bake_in or bake_out):
                         stats["baked_fades"] += 1
                     component = mm.create_source_clip(slot_id=slot_id, start=pre, length=length)
-                    curve = amplitude_curve(ev.gain_points if levels_mode != "off" else None, s, length, rate,
+                    gp = ev.gain_points if levels_mode != "off" else None
+                    if att:  # give back what headroom took away, as clip gain
+                        gp = [(x, v + att) for x, v in gp] if gp else [(ev.tl_in, att)]
+                    curve = amplitude_curve(gp, s, length, rate,
                                             bake_in, bake_out)
                     if curve is not None:
                         component = fx.gain(component, length, curve)
@@ -251,6 +284,9 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                                  ex.describe_file(found) if found else "MISSING"))
     R("")
     R("AAF written: %s  (%.1f MB)" % (aaf_path, os.path.getsize(aaf_path) / 1e6))
+    if stats["headroom"]:
+        R("Headroom: %d clip%s from 32-bit float recordings lowered to fit 24-bit, with the level restored as clip gain."
+          % (stats["headroom"], "" if stats["headroom"] == 1 else "s"))
     R("Levels: " + ("%d clips carry clip gain." % stats["gain_clips"] if levels_mode != "off"
                     else "left out (preset setting)."))
     if fades_mode == "aaf":

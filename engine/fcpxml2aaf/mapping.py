@@ -47,6 +47,7 @@ DEFAULT_OPTIONS = {
     "fades": "aaf",          # "aaf" (real fades) | "gain" (draw fades into clip gain) | "off"
     "camera_audio": "include",  # "include" | "keep" (include, confirmed) | "auto" (drop where a recorder covers it) | "exclude"
     "skip_muted": False,     # leave out clips muted in Final Cut (-96 dB)
+    "float_headroom": True,  # 32-bit float sources over full scale: lower the embedded audio, add the gain back as clip gain
 }
 
 

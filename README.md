@@ -6,6 +6,8 @@ Turns a Final Cut Pro timeline export (FCPXML) into an AAF for Pro Tools and oth
 - **Flattens the magnetic timeline:** connected clips, compound clips, multicam, sync clips, J/L cuts and disabled roles.
 - **Levels and fades:** clip volume and keyframes become clip gain. Fade handles become fades, and cross dissolves become crossfades on the same track.
 - **Audio:** each channel is extracted to a mono 48 kHz/24-bit clip with handles (5 seconds by default) and embedded in the AAF.
+- **Channel-level routing:** pin any channel to a named track ("Boom", "Lav 1") so every export lines up the same way; overflow tracks fill by packing or checkerboarding; nudge a role by frames; override the start timecode.
+- **Preflight** checks each export first and explains problems with one-click fixes.
 - **Presets** save a show's track layout for reuse.
 
 Status: test build. Sample-accurate placement is verified against the source audio, but import into Pro Tools hasn't been confirmed yet.

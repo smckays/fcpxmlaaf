@@ -586,3 +586,28 @@ def tc_string(seconds: Fraction, frame_dur: Fraction, drop: bool = False) -> str
     m = (total // (fps * 60)) % 60
     h = total // (fps * 3600)
     return "%02d:%02d:%02d%s%02d" % (h, m, s, ";" if drop else ":", f)
+
+
+def parse_tc(text: str, frame_dur: Fraction, drop: bool = False) -> Optional[Fraction]:
+    """'01:00:00:00' (or ;FF for drop-frame) -> seconds. None if it isn't a timecode."""
+    import re
+    m = re.match(r"^\s*(\d{1,2})[:;.](\d{2})[:;.](\d{2})[:;.](\d{2})\s*$", text or "")
+    if not m:
+        return None
+    h, mi, se, fr = (int(x) for x in m.groups())
+    fps = round(1 / frame_dur)
+    if mi > 59 or se > 59 or fr >= fps:
+        return None
+    total = ((h * 60 + mi) * 60 + se) * fps + fr
+    if drop and fps in (30, 60):
+        d = 2 if fps == 30 else 4
+        mins = h * 60 + mi
+        total -= d * (mins - mins // 10)
+    return total * frame_dur
+
+
+def effective_tc_start(tl, opts: dict) -> Fraction:
+    """The timeline's start timecode, or the override from the export options."""
+    o = parse_tc(opts.get("start_tc") or "", tl.frame_duration, tl.drop_frame)
+    return tl.tc_start if o is None else o
+

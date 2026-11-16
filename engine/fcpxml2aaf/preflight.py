@@ -14,7 +14,7 @@ from fractions import Fraction
 from typing import List
 
 from .mapping import camera_overlaps, is_muted, route, routed_events
-from .parser import tc_string
+from .parser import effective_tc_start, parse_tc, tc_string
 
 
 def _names(evs, n=3):
@@ -91,8 +91,28 @@ def run(tl, parser, preset: dict, tracks, notes, relinker) -> dict:
              "fix": {"label": "Leave muted clips out", "action": _opt("skip_muted", True)},
              "alt": {"label": "Keep them", "action": "dismiss"}})
 
+    # --- pinned-track clashes
+    for k, n in enumerate(x for x in notes if x.startswith("Pinned track ")):
+        name = n[len("Pinned track "):].split(":")[0]
+        add({"id": "pin:%s:%d" % (name, k), "level": "warn", "title": "Two clips want the %s track at once" % name,
+             "detail": n.split(": ", 1)[1] + " The later one moved to an overflow track. Unpin one of the channels, "
+                       "or edit the overlap in Final Cut, to keep %s clean." % name,
+             "alt": {"label": "OK", "action": "dismiss"}})
+
+    # --- nudges and timecode override
+    nudged = sorted((r, int(v.get("nudge_frames"))) for r, v in (preset.get("roles") or {}).items()
+                    if isinstance(v, dict) and v.get("nudge_frames"))
+    for r, f in nudged:
+        ok.append("%s shifted %+d frame%s" % (r, f, "" if abs(f) == 1 else "s"))
+    if opts.get("start_tc"):
+        if parse_tc(opts["start_tc"], tl.frame_duration, tl.drop_frame) is None:
+            add({"id": "start_tc", "level": "error", "title": "Start timecode isn't valid",
+                 "detail": "“%s” isn't a timecode at %.3f fps. Use HH:MM:SS:FF, or clear it to use the timeline's own." %
+                           (opts["start_tc"], float(1 / tl.frame_duration)),
+                 "fix": {"label": "Use the timeline's timecode", "action": _opt("start_tc", "")}})
+
     # --- track template exceeded
-    for n in notes:
+    for n in (x for x in notes if x.startswith("Group ")):
         add({"id": "template:" + n.split(" ")[1], "level": "warn", "title": "More tracks than the template allows",
              "detail": n + " Overlapping clips need their own tracks. Raise the group's minimum, or route a role to another group.",
              "alt": {"label": "OK", "action": "dismiss"}})
@@ -135,7 +155,8 @@ def run(tl, parser, preset: dict, tracks, notes, relinker) -> dict:
         ok.append("1 cross dissolve becomes a crossfade" if parser.n_transitions == 1 else
                   "%d cross dissolves become crossfades" % parser.n_transitions)
 
-    ok.append("Starts at %s, %.3f fps%s" % (tc_string(tl.tc_start, tl.frame_duration, tl.drop_frame),
+    ok.append("Starts at %s%s, %.3f fps%s" % (tc_string(effective_tc_start(tl, opts), tl.frame_duration, tl.drop_frame),
+                                             " (override)" if parse_tc(opts.get("start_tc") or "", tl.frame_duration, tl.drop_frame) is not None else "",
                                              float(1 / tl.frame_duration), " drop-frame" if tl.drop_frame else ""))
     order = {"error": 0, "warn": 1, "info": 2}
     issues.sort(key=lambda i: order[i["level"]])

@@ -22,7 +22,7 @@ from fcpxml2aaf.convert import convert
 from fcpxml2aaf import preflight as preflight_mod
 from fcpxml2aaf.mapping import build_tracks, load_preset
 from fcpxml2aaf.media import Relinker, find_tool
-from fcpxml2aaf.parser import Parser, resolve_input, tc_string
+from fcpxml2aaf.parser import Parser, effective_tc_start, resolve_input, tc_string
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESOURCES = os.path.dirname(HERE)
@@ -154,7 +154,8 @@ def preview(path: str, preset: dict, project: str = None, roots=()) -> dict:
     opts = pr["options"]
     fps = 1 / tl.frame_duration
     rate = fps if opts["edit_rate"] == "frame" else Fraction(int(opts["sample_rate"]))
-    tracks, notes = build_tracks(tl.events, pr, rate)
+    tc_start = effective_tc_start(tl, opts)
+    tracks, notes = build_tracks(tl.events, pr, rate, tl.frame_duration, (tc_start, tl.frame_duration, tl.drop_frame))
     here = os.path.dirname(os.path.abspath(os.path.normpath(path)))
     rl = Relinker([here] + list(roots or []))
     found = {}
@@ -179,11 +180,12 @@ def preview(path: str, preset: dict, project: str = None, roots=()) -> dict:
             if opts.get("levels", "clip_gain") != "off" and ev.gain_points:
                 it["gain"] = [[round(float(x), 4), round(v, 2)] for x, v in ev.gain_points]
             items.append(it)
-        out.append({"name": t.name, "group": t.group, "clips": len(t.items),
+        out.append({"name": t.name, "group": t.group, "clips": len(t.items), "named": t.named,
+                    "sources": sorted({"%s ch%d" % (m.ev.role, m.channel) for m in t.items}),
                     "roles": sorted({m.ev.role for m in t.items}), "items": items})
     pf = preflight_mod.run(tl, parser, pr, tracks, notes, rl)
     return {"tracks": out, "notes": notes, "preflight": pf, "duration": round(float(tl.duration), 4),
-            "tc_start": round(float(tl.tc_start), 4), "fps": float(fps), "drop": tl.drop_frame,
+            "tc_start": round(float(tc_start), 4), "fps": float(fps), "drop": tl.drop_frame,
             "offline_clips": sum(1 for t in out for i in t["items"] if i["offline"])}
 
 

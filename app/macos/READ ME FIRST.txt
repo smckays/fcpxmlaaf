@@ -1,4 +1,4 @@
-FCPXML to AAF  (Mac app, test build v0.5.0)
+FCPXML to AAF  (Mac app, test build v0.6.0)
 =========================================
 
 Thanks for testing! This app turns a Final Cut Pro timeline export (FCPXML)
@@ -58,6 +58,13 @@ folder next to the FCPXML.
 Tips:
   - To re-route a role: click it, then click a track group (or use its
     "-> DX" menu). "+ New group" makes a new one, e.g. PFX.
+  - Fixed tracks per channel: click a role to see its channels. Set a
+    channel to "+ new named track" (e.g. recorder ch 1 -> "Boom") and it
+    lands on that track in every export. "Tracks" on a group lists its
+    named tracks; rename or reorder them there. Pack or Checkerboard decides
+    how the remaining clips fill the overflow tracks.
+  - Out of sync? The same channel panel has a Nudge in frames. A different
+    start timecode is under Settings.
   - Preflight checks every export first. Red items must be fixed (each has
     a fix button); orange ones are worth a look; grey ones are notes.
   - The strip at the bottom shows exactly what the AAF will contain.
@@ -82,7 +89,7 @@ If the AAF won't open in Pro Tools, try again with Timing set to
 Both are under Settings. That tells us what Pro Tools prefers.
 
 
-KNOWN LIMITS (v0.5.0)
+KNOWN LIMITS (v0.6.0)
 ---------------------
 - Fade shapes (+3 dB, S-curve) arrive as plain linear fades.
 - Pan and audio effects (EQ, compression, etc.) are not carried over.

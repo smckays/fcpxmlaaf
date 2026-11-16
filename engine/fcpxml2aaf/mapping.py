@@ -30,10 +30,10 @@ Preset format (JSON) — this is what the mapping web page saves:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional
 
-from .parser import AudioEvent
+from .parser import AudioEvent, tc_string
 
 DEFAULT_GROUP_NAMES = {"dialogue": "DX", "music": "MX", "effects": "FX"}
 
@@ -56,6 +56,7 @@ class MonoEvent:
     ev: AudioEvent
     channel: int
     group: str
+    pin: Optional[str] = None   # named track this channel always goes to
 
 
 @dataclass
@@ -63,6 +64,7 @@ class Track:
     name: str
     group: str
     items: List[MonoEvent] = field(default_factory=list)
+    named: bool = False         # a fixed, named track (e.g. "Boom") rather than an overflow track
 
 
 def load_preset(path: Optional[str]) -> dict:
@@ -164,42 +166,109 @@ def routed_events(events: List[AudioEvent], preset: dict):
     return routed
 
 
-def build_tracks(events: List[AudioEvent], preset: dict, rate) -> (List[Track], List[str]):
-    """rate: edit units per second (Fraction) used to decide overlaps."""
+def _nudged(ev: AudioEvent, sec):
+    """Move a clip later (sec > 0) or earlier on the timeline; its audio stays the same."""
+    if not sec:
+        return ev
+    tl_in, src_in, dur = ev.tl_in + sec, ev.src_in, ev.dur
+    if tl_in < 0:  # pushed before the start: trim the head
+        src_in, dur, tl_in = src_in - tl_in, dur + tl_in, 0
+    gp = [(x + sec, v) for x, v in ev.gain_points] if ev.gain_points else ev.gain_points
+    return replace(ev, tl_in=tl_in, src_in=src_in, dur=dur, gain_points=gp)
+
+
+def _fmt_time(sec, tc):
+    if tc:
+        start, fd, drop = tc
+        return tc_string(start + sec, fd, drop)
+    return "%.2f s" % float(sec)
+
+
+def build_tracks(events: List[AudioEvent], preset: dict, rate, frame_dur=None, tc=None) -> (List[Track], List[str]):
+    """Lay routed clips onto tracks.
+    rate: edit units per second (Fraction) used to decide overlaps.
+    frame_dur: seconds per frame, needed for nudges. tc: (start, frame_dur, drop) for readable notes.
+    Per group: named tracks first (pinned channels always land there), then numbered overflow tracks,
+    filled first-free ("pack") or alternating ("checkerboard")."""
     notes: List[str] = []
     monos: List[MonoEvent] = []
     for ev, (group, use) in routed_events(events, preset):
+        rule = _role_rule(preset, ev.role) or {}
+        nf = int(rule.get("nudge_frames") or 0)
+        if nf and frame_dur:
+            ev = _nudged(ev, nf * frame_dur)
+            if ev.dur <= 0:
+                continue
+        pins = {int(k): v for k, v in (rule.get("pins") or {}).items() if v}
         for c in use:
-            monos.append(MonoEvent(ev=ev, channel=c, group=group))
+            monos.append(MonoEvent(ev=ev, channel=c, group=group, pin=pins.get(c)))
 
     share_xfades = preset["options"].get("fades", "aaf") == "aaf"
+    cfgs = {g["name"]: g for g in preset.get("groups") or []}
     order = [g["name"] for g in preset.get("groups") or []]
-    mins = {g["name"]: int(g.get("min_tracks", 0)) for g in preset.get("groups") or []}
     for m in monos:
         if m.group not in order:
             order.append(m.group)
 
     tracks: List[Track] = []
     for g in order:
+        cfg = cfgs.get(g, {})
+        named = []
+        for n in cfg.get("tracks") or []:
+            if n and n not in named:
+                named.append(n)
+        checker = cfg.get("layout") == "checkerboard"
         mine = sorted((m for m in monos if m.group == g), key=lambda m: (m.ev.tl_in, m.ev.role, m.channel))
-        lanes: List[Track] = [Track(name="%s %d" % (g, i + 1), group=g) for i in range(mins.get(g, 0))]
+        lanes: List[Track] = [Track(name=n, group=g, named=True) for n in named]
         ends: List[int] = [-1] * len(lanes)
+
+        def add_lane():
+            lanes.append(Track(name="%s %d" % (g, len(lanes) + 1), group=g))
+            ends.append(-1)
+            return len(lanes) - 1
+
+        minimum = max(int(cfg.get("min_tracks", 0) or 0), len(named))
+        while len(lanes) < minimum:
+            add_lane()
+        if checker and any(not (m.pin in named) for m in mine):
+            while sum(1 for l in lanes if not l.named) < 2:
+                add_lane()
+
+        def fits(i, m, s):
+            return ends[i] <= s or (share_xfades and lanes[i].items and is_crossfade(lanes[i].items[-1], m, ends[i], s, rate))
+
+        last_auto = -1
         for m in mine:
             s = int(round(m.ev.tl_in * rate))
             e = int(round((m.ev.tl_in + m.ev.dur) * rate))
-            for i, end in enumerate(ends):
-                if end <= s or (share_xfades and lanes[i].items and is_crossfade(lanes[i].items[-1], m, end, s, rate)):
-                    lanes[i].items.append(m)
-                    ends[i] = e
-                    break
-            else:
-                lanes.append(Track(name="%s %d" % (g, len(lanes) + 1), group=g, items=[m]))
-                ends.append(e)
-                if mins.get(g) and len(lanes) > mins[g]:
-                    notes.append("Group %s needed %d tracks (preset asked for %d)." % (g, len(lanes), mins[g]))
+            target = None
+            if m.pin in named:
+                i = named.index(m.pin)
+                if fits(i, m, s):
+                    target = i
+                else:
+                    clash = lanes[i].items[-1].ev
+                    prev = lanes[i].items[-1]
+                    notes.append("Pinned track %s: %s (ch %d) and %s (ch %d) overlap at %s." %
+                                 (m.pin, clash.name, prev.channel, m.ev.name, m.channel, _fmt_time(m.ev.tl_in, tc)))
+            if target is None:
+                autos = [i for i, l in enumerate(lanes) if not l.named]
+                if checker and last_auto in autos:
+                    k = autos.index(last_auto)
+                    autos = autos[k + 1:] + autos[:k + 1]
+                target = next((i for i in autos if fits(i, m, s)), None)
+                if target is None:
+                    target = add_lane()
+                last_auto = target
+            lanes[target].items.append(m)
+            ends[target] = max(ends[target], e)
+        if minimum and len(lanes) > minimum and not named:
+            notes.append("Group %s needed %d tracks (preset asked for %d)." % (g, len(lanes), minimum))
+        elif named and int(cfg.get("min_tracks", 0) or 0) and len(lanes) > int(cfg["min_tracks"]):
+            notes.append("Group %s needed %d tracks (preset asked for %d)." % (g, len(lanes), int(cfg["min_tracks"])))
         tracks.extend(lanes)
     # de-duplicate notes, keep the last (highest) count per group
     seen = {}
     for n in notes:
-        seen[n.split(" needed")[0]] = n
+        seen[n.split(" needed")[0] if n.startswith("Group ") else n] = n
     return tracks, list(seen.values())

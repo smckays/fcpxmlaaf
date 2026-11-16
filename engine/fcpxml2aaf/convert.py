@@ -21,7 +21,7 @@ from . import __version__
 from .levels import Effects, amplitude_curve
 from .mapping import MonoEvent, build_tracks, is_crossfade, load_preset
 from .media import Extractor, MediaError, Relinker
-from .parser import Parser, scan, tc_string
+from .parser import Parser, effective_tc_start, scan, tc_string
 
 
 def safe_name(s: str) -> str:
@@ -44,7 +44,8 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
     fps = 1 / tl.frame_duration
     sr = int(opts["sample_rate"])
     rate = fps if opts["edit_rate"] == "frame" else Fraction(sr)
-    tracks, notes = build_tracks(tl.events, preset, rate)
+    tl.tc_start = effective_tc_start(tl, opts)
+    tracks, notes = build_tracks(tl.events, preset, rate, tl.frame_duration, (tl.tc_start, tl.frame_duration, tl.drop_frame))
 
     out_dir = out_dir or os.path.dirname(os.path.abspath(parser.path if not os.path.isdir(input_path) else input_path))
     os.makedirs(out_dir, exist_ok=True)

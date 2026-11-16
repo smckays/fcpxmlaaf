@@ -1,18 +1,18 @@
 {
-  "version": "0.5.0",
-  "notes": "New look: your Final Cut audio is wired to Pro Tools track groups like a patchbay. Click a role, then a group, to re-route it.\nNew Preflight panel checks every export before it's written and explains what's wrong with a one-click fix. It catches camera scratch audio going out alongside your sound recorder (the cause of distorted, duplicate dialogue tracks), offline media, muted clips and more.\nThemes: Blackout (dark) or Paper (light), under Appearance.",
+  "version": "0.6.0",
+  "notes": "Fixed tracks per channel: click a role, then set a channel to \"+ new named track\" (for example recorder ch 1 -> Boom). It lands on that track in every export.\nEach group's Tracks panel lists its named tracks (rename, reorder) and chooses Pack or Checkerboard for the rest.\nNudge a role by frames to fix sync, and set a different start timecode under Settings.\nPresets remember all of it.",
   "files": {
     "apple-silicon": {
-      "name": "FCPXML-to-AAF-v0.5.0-mac-apple-silicon.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.5.0-mac-apple-silicon.zip",
-      "size": 33897353,
-      "sha256": "4c2962babc1e85a68a56dd5c72749c3ea40275ddd4fed38deb737ad0bb17ad08"
+      "name": "FCPXML-to-AAF-v0.6.0-mac-apple-silicon.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.6.0-mac-apple-silicon.zip",
+      "size": 33901526,
+      "sha256": "b762bc1e1f1d268ca6281d6327abb2e67f2a0b16c583ab3169c772b592380f34"
     },
     "intel": {
-      "name": "FCPXML-to-AAF-v0.5.0-mac-intel.zip",
-      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.5.0-mac-intel.zip",
-      "size": 35714699,
-      "sha256": "078bd97c51e5b516d96b35c9dda6ccf9cd6941be6526aa24ffffd11ee79cf731"
+      "name": "FCPXML-to-AAF-v0.6.0-mac-intel.zip",
+      "url": "https://raw.githubusercontent.com/smckays/fcpxmlaaf/downloads/FCPXML-to-AAF-v0.6.0-mac-intel.zip",
+      "size": 35718872,
+      "sha256": "f3a0f0e88fa556db2480b2c5784974006e7b79073f1795d8a551eacc12785864"
     }
   }
 }

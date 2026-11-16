@@ -1,4 +1,4 @@
-FCPXML to AAF  (Mac app, test build v0.7.0)
+FCPXML to AAF  (Mac app, test build v0.8.0)
 =========================================
 
 Thanks for testing! This app turns a Final Cut Pro timeline export (FCPXML)
@@ -69,6 +69,11 @@ Tips:
     then points out distortion in the original recordings (with "Show on
     timeline"), silent channels, and duplicate or safety-copy channels,
     each with a one-click fix where there is one.
+  - After every export the app re-opens the AAF and checks it: tracks,
+    timecode, every clip's position and clip gain, and the audio itself
+    against your source files, sample for sample. "AAF written and
+    verified" means all of that passed; otherwise the report says what's
+    wrong and where. (Switch it off under Settings if you're in a hurry.)
   - Preflight checks every export first. Red items must be fixed (each has
     a fix button); orange ones are worth a look; grey ones are notes.
   - The strip at the bottom shows exactly what the AAF will contain.
@@ -93,7 +98,7 @@ If the AAF won't open in Pro Tools, try again with Timing set to
 Both are under Settings. That tells us what Pro Tools prefers.
 
 
-KNOWN LIMITS (v0.7.0)
+KNOWN LIMITS (v0.8.0)
 ---------------------
 - Fade shapes (+3 dB, S-curve) arrive as plain linear fades.
 - Pan and audio effects (EQ, compression, etc.) are not carried over.

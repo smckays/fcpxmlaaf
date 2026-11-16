@@ -110,6 +110,22 @@ class PCMWav:
         self.width = self.bits // 8
         self.frames = self.data_size // self.align
 
+    def read_channel(self, channel: int, start_frame: int, n_frames: int) -> List[int]:
+        """Integer samples of one channel (zeros before the start of the file)."""
+        pad = max(0, -start_frame)
+        start_frame = max(0, start_frame)
+        n = max(0, min(n_frames - pad, self.frames - start_frame))
+        with open(self.path, "rb") as fh:
+            fh.seek(self.data_offset + start_frame * self.align)
+            data = fh.read(n * self.align)
+        w, o = self.width, (channel - 1) * self.width
+        out = [0] * pad
+        for i in range(n):
+            j = i * self.align + o
+            v = int.from_bytes(data[j:j + w], "little", signed=(w > 1))
+            out.append(v - 128 if w == 1 else v)
+        return out
+
     def extract_channel(self, channel: int, start_frame: int, n_frames: int, out_path: str, gain: float = 1.0) -> int:
         start_frame = max(0, start_frame)
         n_frames = max(0, min(n_frames, self.frames - start_frame))

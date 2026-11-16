@@ -265,7 +265,22 @@ class Listener:
             else:
                 pending += 1
         self.want(resolved)
-        return {"results": res, "pending": pending, "total": len(resolved), "errors": errs}
+        return {"results": res, "pending": pending, "total": len(resolved), "errors": errs,
+                "verify": lambda path, a, b, off, start, dur: self.residual(relinker.find(path), a, b, off, start, dur)}
+
+    def residual(self, path, a, b, off, start, dur):
+        """Waveform check that ch b is a copy of ch a (cached: preview runs often)."""
+        if not path:
+            return None
+        key = (path, self._stamp(path), a, b, round(off, 2), round(start, 2), round(dur, 2))
+        cache = self.__dict__.setdefault("_res_cache", {})
+        if key not in cache:
+            from fcpxml2aaf.analysis import residual_db
+            from fcpxml2aaf.media import Extractor
+            if self._ex is None:
+                self._ex = Extractor(48000, 24, tempfile.gettempdir())
+            cache[key] = residual_db(path, self._ex.ffmpeg, self._ex._stream_channels(path), a, b, off, start, dur)
+        return cache[key]
 
 
 LISTEN = Listener()
@@ -275,6 +290,7 @@ LISTEN = Listener()
 class Job:
     def __init__(self):
         self.state = "idle"
+        self.phase = "write"
         self.done = self.total = 0
         self.log = []
         self.report = ""
@@ -283,7 +299,7 @@ class Job:
         self.started = None
 
     def to_dict(self):
-        return {"state": self.state, "done": self.done, "total": self.total, "log": self.log[-8:],
+        return {"state": self.state, "phase": self.phase, "done": self.done, "total": self.total, "log": self.log[-8:],
                 "report": self.report, "aaf": self.aaf, "report_path": self.report_path, "error": self.error,
                 "elapsed": round(time.time() - self.started, 1) if self.started else 0}
 
@@ -297,8 +313,8 @@ def run_export(path, preset, out_dir, project, media_roots):
     job.state, job.started = "running", time.time()
     JOB = job
 
-    def prog(d, t):
-        job.done, job.total = d, t
+    def prog(d, t, phase="write"):
+        job.done, job.total, job.phase = d, t, phase
 
     try:
         cached = {p: r[1] for p, r in LISTEN.results.items()}

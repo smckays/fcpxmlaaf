@@ -154,6 +154,7 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
             tc_slot.segment = tc
 
             fx = Effects(f)
+            plan = []
             for tnum, tr in enumerate(tracks, 1):
                 slot = comp.create_sound_slot(edit_rate=rate)
                 slot.name = tr.name
@@ -166,12 +167,13 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     ev = m.ev
                     s = int(round(ev.tl_in * rate))
                     length = int(round((ev.tl_in + ev.dur) * rate)) - s
-                    xfade = 0
+                    xfade = skip = 0
                     if s < last_end:
                         if fades_mode == "aaf" and placed and is_crossfade(MonoEvent(placed[-1][5], 0, ""), MonoEvent(ev, 0, ""), last_end, s, rate):
                             xfade = last_end - s  # shares the track through a crossfade
-                        else:  # rounding overlap guard
-                            length -= last_end - s
+                        else:  # rounding overlap guard: start later, and skip the same amount of audio
+                            skip = last_end - s
+                            length -= skip
                             s = last_end
                     if length <= 0:
                         continue
@@ -213,16 +215,18 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     mslot.segment.length = int(math.floor(Fraction(frames, sr) * rate))
                     mslot["PhysicalTrackNumber"].value = 1
                     os.remove(wav)
-                    placed.append((s, length, mm, mslot.slot_id, pre, ev, xfade, att))
+                    placed.append((s, length, mm, mslot.slot_id, pre + skip, ev, xfade, att, src, m.channel, ev.src_in + Fraction(skip) / rate))
                     last_end = s + length
                     if done % 25 == 0:
                         log("  %d / %d clips" % (done, total))
                     if progress:
-                        progress(done, total)
+                        progress(done, total, "write")
 
                 # Lay the clips out with filler, clip gain, fades and crossfades.
                 pos, owed = 0, 0
-                for i, (s, length, mm, slot_id, pre, ev, xfade, att) in enumerate(placed):
+                ptrack = {"name": tr.name, "items": []}
+                plan.append(ptrack)
+                for i, (s, length, mm, slot_id, pre, ev, xfade, att, src_res, chan, src_at) in enumerate(placed):
                     nxt = placed[i + 1] if i + 1 < len(placed) else None
                     xfade_out = nxt[6] if nxt is not None else 0
                     fi = fo = 0
@@ -246,6 +250,8 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     if curve is not None:
                         component = fx.gain(component, length, curve)
                         stats["gain_clips"] += 1
+                    ptrack["items"].append({"s": s, "length": length, "start": pre, "src": src_res, "ch": chan,
+                                            "src_sec": src_at, "att": att, "curve": curve, "clip": mm.name})
 
                     gap = s - pos
                     if xfade:
@@ -270,6 +276,15 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
                     seq.components.append(f.create.Filler("sound", rest))
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+    verdict = None
+    if opts.get("verify", True) and os.path.exists(aaf_path):
+        from .verify import verify_aaf
+        log("Checking the AAF against the plan…")
+        verdict = verify_aaf(aaf_path, plan, int(round(tl.tc_start * fps)), rate, sr, ex.extract,
+                             progress=(lambda d, t: progress(d, t, "verify")) if progress else None,
+                             fmt_tc=lambda u: tc_string(tl.tc_start + Fraction(u) / rate, tl.frame_duration, tl.drop_frame))
+        errors.extend("CHECK FAILED  " + p for p in verdict["problems"])
 
     R("Audio engine: " + ex.describe())
     R("")
@@ -297,6 +312,15 @@ def convert(input_path, preset_path=None, out_dir=None, project=None, media_root
     else:
         R("Fades: " + ("drawn into each clip's gain line (preset setting)." if fades_mode == "gain"
                        else "left out (preset setting)."))
+    if verdict is not None:
+        R("")
+        R("VERIFICATION (the finished AAF, re-read and compared with the plan)")
+        R("  " + ("VERIFIED: every check passed." if verdict["ok"] else "NOT VERIFIED: %d problem%s, listed below." %
+                  (len(verdict["problems"]), "" if len(verdict["problems"]) == 1 else "s")))
+        for line in verdict["passed"]:
+            R("  [OK] " + line)
+    elif not opts.get("verify", True):
+        R("Verification: turned off in settings.")
     _finish(report, tl.warnings + notes, errors, report_path, log)
     return aaf_path, report_path
 

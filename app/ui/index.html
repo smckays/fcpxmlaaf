@@ -244,6 +244,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   <h3 id="setT">Export settings</h3>
   <div class="form">
     <label for="oCam">Camera audio</label><select id="oCam"><option value="include">Include (Preflight warns when a recorder covers it)</option><option value="auto">Leave out where a recorder covers it</option><option value="keep">Always include</option><option value="exclude">Never include</option></select>
+    <label for="oVerify">After export</label><select id="oVerify"><option value="true">Check the AAF against the source audio</option><option value="false">Don't check</option></select>
     <label for="oHead">Hot float audio</label><select id="oHead"><option value="true">Keep intact (lower it, add clip gain back)</option><option value="false">Write as is (clips above full scale)</option></select>
     <label for="oMuted">Muted clips</label><select id="oMuted"><option value="false">Include</option><option value="true">Leave out</option></select>
     <label for="oLevels">Volume levels</label><select id="oLevels"><option value="clip_gain">As clip gain</option><option value="off">Leave out (flat)</option></select>
@@ -312,7 +313,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   function mainOf(r) { return r.split(".")[0].toLowerCase() }
 
   var S = { scan: null, roles: {}, groups: [], mediaRoots: [], out: null, project: null, presets: [], pv: null, sel: null, dismissed: {},
-    options: { handles_sec: 5, sample_rate: 48000, bit_depth: 24, edit_rate: "frame", unmapped: "by_main_role", levels: "clip_gain", fades: "aaf", camera_audio: "include", skip_muted: false, start_tc: "", float_headroom: true }, open: {} };
+    options: { handles_sec: 5, sample_rate: 48000, bit_depth: 24, edit_rate: "frame", unmapped: "by_main_role", levels: "clip_gain", fades: "aaf", camera_audio: "include", skip_muted: false, start_tc: "", float_headroom: true, verify: true }, open: {} };
 
   // ---------- dialogs ----------
   function openDlg(id) { $(id).hidden = false; var f = $(id).querySelector("button, select, input"); if (f) f.focus() }
@@ -702,6 +703,7 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   function renderSettings() {
     var o = S.options;
     $("oHead").value = String(o.float_headroom !== false);
+    $("oVerify").value = String(o.verify !== false);
     $("oCam").value = o.camera_audio; $("oMuted").value = String(!!o.skip_muted); $("oLevels").value = o.levels; $("oFades").value = o.fades;
     $("oHandles").value = o.handles_sec; $("oRate").value = o.sample_rate + "/" + o.bit_depth; $("oEdit").value = o.edit_rate; $("oUnmapped").value = o.unmapped;
     $("oTc").value = o.start_tc || ""; $("oTc").placeholder = S.scan ? S.scan.start_timecode : "from the timeline";
@@ -709,7 +711,8 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
   $("settingsBtn").onclick = function () { renderSettings(); openDlg("settingsDlg") };
   $("settingsDlg").addEventListener("change", function (e) {
     var t = e.target, o = S.options;
-    if (t.id === "oHead") o.float_headroom = t.value === "true";
+    if (t.id === "oVerify") o.verify = t.value === "true";
+    else if (t.id === "oHead") o.float_headroom = t.value === "true";
     else if (t.id === "oCam") o.camera_audio = t.value;
     else if (t.id === "oMuted") o.skip_muted = t.value === "true";
     else if (t.id === "oLevels") o.levels = t.value;
@@ -780,13 +783,18 @@ pre.report { margin: 0; font: 11px/1.5 var(--mono); white-space: pre-wrap; backg
       lastJob = j;
       if (j.state === "running") {
         $("barFill").style.width = (j.total ? Math.max(3, Math.round(100 * j.done / j.total)) : 3) + "%";
-        $("exportNote").textContent = j.total ? "Writing audio: clip " + j.done + " of " + j.total : "Reading timeline…";
+        $("exportNote").textContent = !j.total ? "Reading timeline…" : j.phase === "verify" ? "Checking the AAF: clip " + j.done + " of " + j.total
+          : "Writing audio: clip " + j.done + " of " + j.total;
         setTimeout(poll, 350);
       } else if (j.state === "done") {
         finish(); $("barFill").style.width = "100%";
-        var problems = /PROBLEMS \((\d+)\)/.exec(j.report);
-        $("exportNote").className = problems ? "note bad" : "note good";
-        $("exportNote").textContent = problems ? "AAF written, with " + plural(+problems[1], "problem") + ". See the report." : "AAF written in " + j.elapsed + " s ✓";
+        var problems = /PROBLEMS \((\d+)\)/.exec(j.report), verified = /VERIFIED: every check passed/.test(j.report),
+          failed = /NOT VERIFIED: (\d+)/.exec(j.report);
+        $("exportNote").className = problems || failed ? "note bad" : "note good";
+        $("exportNote").textContent = failed ? "AAF written, but the check found " + plural(+failed[1], "problem") + ". See the report."
+          : problems ? "AAF written, with " + plural(+problems[1], "problem") + ". See the report."
+          : verified ? "AAF written and verified ✓ (" + j.elapsed + " s). Every clip matches its source."
+          : "AAF written in " + j.elapsed + " s ✓";
         $("doneBtns").hidden = false; $("report").textContent = j.report;
       } else if (j.state === "failed") { finish(); $("exportNote").className = "note bad"; $("exportNote").textContent = "Export failed: " + j.error }
       else setTimeout(poll, 350);

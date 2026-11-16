@@ -8,6 +8,7 @@ Turns a Final Cut Pro timeline export (FCPXML) into an AAF for Pro Tools and oth
 - **Audio:** each channel is extracted to a mono 48 kHz/24-bit clip with handles (5 seconds by default) and embedded in the AAF.
 - **Channel-level routing:** pin any channel to a named track ("Boom", "Lav 1") so every export lines up the same way; overflow tracks fill by packing or checkerboarding; nudge a role by frames; override the start timecode.
 - **Preflight** checks each export first and explains problems with one-click fixes.
+- **Verified exports:** after writing, the app re-opens the AAF and checks track names and order, start timecode, every clip's position, length and clip gain, and compares the embedded audio at the start and end of every clip with the source file, sample for sample (WAV sources are read directly, without the decoder used for the export). Problems are reported with clip, track, timecode and how far out of sync.
 - **Listens to the source audio:** finds distortion in the original recordings (with timecode), silent channels, and duplicate or −10 dB safety-copy channels (confirmed on the waveform, not just levels). 32-bit float recordings that go over full scale are kept intact: the embedded audio is lowered to fit 24-bit and the level restored as clip gain.
 - **Presets** save a show's track layout for reuse.
 
@@ -42,6 +43,7 @@ Needs ffmpeg for audio inside video files. WAV/AIFF works without it.
 | `engine/aaf2/` | Vendored [pyaaf2](https://github.com/markreidvfx/pyaaf2) (MIT) |
 | `app/` | Mac app: local service (`server.py`), window (`main.py`), interface (`ui/index.html`; the earlier pro-editor look is `ui/classic.html`), bundle files (`macos/`) |
 | `engine/fcpxml2aaf/preflight.py` | Preflight checks: what's wrong, why, and the fix |
+| `engine/fcpxml2aaf/verify.py` | Post-export check of the finished AAF against the plan and the source audio |
 | `engine/fcpxml2aaf/analysis.py` | Audio analysis: clipping, silence, duplicate channels, float headroom |
 | `design/mockups/` | Design directions explored for the interface |
 | `presets/` | Example presets |
